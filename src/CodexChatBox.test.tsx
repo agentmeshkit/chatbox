@@ -1,5 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
+import { existsSync, readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { CodexChatBox } from './CodexChatBox.js';
@@ -10,6 +12,20 @@ function getTextarea() {
 }
 
 describe('CodexChatBox', () => {
+  it('keeps the stylesheet available through the package export map', () => {
+    const packageJsonPath = resolve(process.cwd(), 'package.json');
+    const stylesPath = resolve(process.cwd(), 'src/styles.css');
+    const packageJson = JSON.parse(
+      readFileSync(packageJsonPath, 'utf8'),
+    ) as {
+      exports: Record<string, unknown>;
+    };
+
+    expect(packageJson.exports['./styles.css']).toBe('./dist/styles.css');
+    expect(existsSync(stylesPath)).toBe(true);
+    expect(readFileSync(stylesPath, 'utf8')).toContain('.amk-chatbox');
+  });
+
   it('submits uncontrolled text with Cmd/Ctrl+Enter and clears after submit', () => {
     const onSubmit = vi.fn();
     render(
@@ -78,6 +94,110 @@ describe('CodexChatBox', () => {
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
+  it('exposes submit state to a custom sendButton slot', async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn();
+
+    render(
+      <CodexChatBox
+        onSubmit={onSubmit}
+        slots={{
+          sendButton: ({ submit, canSubmit, text }) => (
+            <button type="button" disabled={!canSubmit} onClick={submit}>
+              {canSubmit ? `Send ${text.trim()}` : 'Cannot send'}
+            </button>
+          ),
+        }}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Cannot send' })).toHaveProperty(
+      'disabled',
+      true,
+    );
+
+    await user.type(getTextarea(), 'hello slot');
+    await user.click(screen.getByRole('button', { name: 'Send hello slot' }));
+
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ text: 'hello slot' }));
+  });
+
+  it('blocks controls and submission while disabled', async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn();
+
+    render(
+      <CodexChatBox
+        defaultValue="blocked"
+        disabled
+        modelOptions={[{ value: 'gpt-5', label: 'GPT-5' }]}
+        onSubmit={onSubmit}
+      />,
+    );
+
+    const root = screen.getByRole('form', { name: 'Chat input' });
+    expect(root.getAttribute('data-disabled')).toBe('');
+    expect(root.getAttribute('aria-disabled')).toBe('true');
+    expect(getTextarea()).toHaveProperty('disabled', true);
+    expect(screen.getByRole('button', { name: 'Attach files' })).toHaveProperty(
+      'disabled',
+      true,
+    );
+    expect(screen.getByRole('combobox', { name: 'Model' })).toHaveProperty(
+      'disabled',
+      true,
+    );
+    expect(screen.getByRole('button', { name: 'Send message' })).toHaveProperty(
+      'disabled',
+      true,
+    );
+
+    fireEvent.keyDown(getTextarea(), { key: 'Enter', metaKey: true });
+    await user.click(screen.getByRole('button', { name: 'Send message' }));
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it('marks loading as busy and prevents submission', () => {
+    const onSubmit = vi.fn();
+
+    render(<CodexChatBox defaultValue="wait" loading onSubmit={onSubmit} />);
+
+    const root = screen.getByRole('form', { name: 'Chat input' });
+    expect(root.getAttribute('data-loading')).toBe('');
+    expect(root.getAttribute('aria-busy')).toBe('true');
+    expect(getTextarea().getAttribute('aria-busy')).toBe('true');
+    expect(screen.getByRole('status').textContent).toContain('Loading');
+    expect(screen.getByRole('button', { name: 'Attach files' })).toHaveProperty(
+      'disabled',
+      true,
+    );
+    expect(screen.getByRole('button', { name: 'Send message' })).toHaveProperty(
+      'disabled',
+      true,
+    );
+
+    fireEvent.keyDown(getTextarea(), { key: 'Enter', metaKey: true });
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it('marks streaming as busy and prevents submission', () => {
+    const onSubmit = vi.fn();
+
+    render(<CodexChatBox defaultValue="wait" streaming onSubmit={onSubmit} />);
+
+    const root = screen.getByRole('form', { name: 'Chat input' });
+    expect(root.getAttribute('data-streaming')).toBe('');
+    expect(root.getAttribute('aria-busy')).toBe('true');
+    expect(screen.getByRole('status').textContent).toContain('Streaming');
+    expect(screen.getByRole('button', { name: 'Send message' })).toHaveProperty(
+      'disabled',
+      true,
+    );
+
+    fireEvent.keyDown(getTextarea(), { key: 'Enter', metaKey: true });
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
   it('renders attachment chips, removes files, and submits remaining files', async () => {
     const user = userEvent.setup();
     const onSubmit = vi.fn();
@@ -101,6 +221,37 @@ describe('CodexChatBox', () => {
     const payload = onSubmit.mock.calls[0][0] as ChatBoxSubmitPayload;
     expect(payload.text).toBe('with files');
     expect(payload.files).toEqual([keep]);
+  });
+
+  it('calls file removal hooks for controlled files', async () => {
+    const user = userEvent.setup();
+    const removed = vi.fn();
+    const onFilesChange = vi.fn();
+    const keep = new File(['keep'], 'keep.txt', { type: 'text/plain' });
+    const remove = new File(['remove'], 'remove.txt', { type: 'text/plain' });
+
+    function ControlledFiles() {
+      const [files, setFiles] = useState([keep, remove]);
+      return (
+        <CodexChatBox
+          files={files}
+          onFilesChange={(nextFiles) => {
+            onFilesChange(nextFiles);
+            setFiles(nextFiles);
+          }}
+          onFileRemove={removed}
+          onSubmit={vi.fn()}
+        />
+      );
+    }
+
+    render(<ControlledFiles />);
+
+    await user.click(screen.getByRole('button', { name: 'Remove remove.txt' }));
+
+    expect(removed).toHaveBeenCalledWith(remove, 1);
+    expect(onFilesChange).toHaveBeenCalledWith([keep]);
+    expect(screen.queryByText('remove.txt')).toBeNull();
   });
 
   it('adds files selected from the picker without uploading them', async () => {

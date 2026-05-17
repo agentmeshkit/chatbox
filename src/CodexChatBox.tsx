@@ -323,7 +323,7 @@ export function CodexChatBox({
     setFileList(multiple ? [...currentFiles, ...nextSelectedFiles] : nextSelectedFiles);
   };
 
-  const showLoadingIndicator = loading || streaming || Boolean(slots?.loadingIndicator);
+  const showLoadingIndicator = loading || streaming;
   const loadingLabel = loading ? 'Loading' : streaming ? 'Streaming' : undefined;
   const textareaStyle = {
     ...style,
@@ -338,6 +338,8 @@ export function CodexChatBox({
       data-streaming={streaming ? '' : undefined}
       role="form"
       aria-label={labels?.root ?? 'Chat input'}
+      aria-disabled={disabled ? true : undefined}
+      aria-busy={loading || streaming ? true : undefined}
     >
       {currentFiles.length > 0 && (
         <div className="amk-chatbox__attachments" data-testid="chatbox-attachments">
@@ -415,7 +417,7 @@ export function CodexChatBox({
 
         <div className="amk-chatbox__toolbar-right">
           {showLoadingIndicator && (
-            <div className="amk-chatbox__loading" aria-live="polite">
+            <div className="amk-chatbox__loading" role="status" aria-live="polite">
               {renderSlot(slots?.loadingIndicator, context) ?? (
                 <>
                   <span className="amk-chatbox__spinner" aria-hidden="true" />
