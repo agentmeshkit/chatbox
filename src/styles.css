@@ -48,7 +48,8 @@
 
 .amk-chatbox[data-disabled],
 .amk-chatbox[data-loading],
-.amk-chatbox[data-streaming] {
+.amk-chatbox[data-streaming],
+.amk-chatbox[data-submitting] {
   opacity: 0.76;
 }
 
@@ -295,6 +296,16 @@
 
 .amk-chatbox__send:hover:not(:disabled) {
   background: #ffffff;
+}
+
+.amk-chatbox__stop {
+  background: var(--amk-chatbox-danger);
+  color: #ffffff;
+  font-size: 12px;
+}
+
+.amk-chatbox__stop:hover:not(:disabled) {
+  background: var(--amk-chatbox-danger);
 }
 
 .amk-chatbox__select,

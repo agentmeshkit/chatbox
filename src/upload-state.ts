@@ -63,18 +63,15 @@ export function isImageEntry(entry: AttachmentEntry): boolean {
 
 /**
  * Pick a URL to use for a chip preview / thumbnail. Prefers an already-known
- * uploaded URL, otherwise creates an object URL from the held File. May return
- * undefined when the entry has neither.
+ * uploaded URL, otherwise reads a previously-created object URL from the
+ * lifecycle cache. May return undefined when the entry has neither.
  */
-export function pickThumbnailUrl(entry: AttachmentEntry): string | undefined {
+export function pickThumbnailUrl(
+  entry: AttachmentEntry,
+  objectUrls?: ReadonlyMap<string, string>,
+): string | undefined {
   if (entry.uploaded?.url) return entry.uploaded.url;
-  if (entry.file) {
-    try {
-      return URL.createObjectURL(entry.file);
-    } catch {
-      return undefined;
-    }
-  }
+  if (entry.file) return objectUrls?.get(entry.id);
   return undefined;
 }
 

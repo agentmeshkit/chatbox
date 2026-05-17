@@ -59,6 +59,11 @@ Submit uses the current textarea DOM value, not only React state. This keeps
 uncontrolled usage resilient to IME composition and the textarea `onChange`
 loss mode seen in earlier AgentWeb composer implementations.
 
+`onSubmit` can be async. By default, `clearOnSubmit={true}` clears text/files
+after a successful submit; rejected submissions keep the draft and can be
+observed with `onSubmitError`. Set `clearOnSubmit="immediate"` to restore
+fire-and-forget clearing, or `false` / `"never"` to keep drafts after submit.
+
 For a compact guide intended to be pasted into AI agent context, see
 [`docs/AI_AGENT_INTEGRATION.md`](docs/AI_AGENT_INTEGRATION.md).
 
@@ -99,7 +104,8 @@ and execution policy as backend decisions rather than trusting the UI value.
 
 Slots accept either React nodes or render functions. Render functions receive
 state and actions such as `submit`, `focus`, `openFilePicker`, `removeFile`,
-`clearText`, and `clearFiles`.
+`clearText`, `clearFiles`, `stop`, `submitting`, `pendingAttachmentCount`, and
+`canStop`.
 
 ```tsx
 <CodexChatBox
@@ -189,6 +195,11 @@ In managed-upload mode, newly selected, dropped, or pasted files move through
 in `payload.attachments` on submit; pending and failed entries remain visible
 for the user to wait, remove, or retry.
 
+By default, submit is disabled while any managed attachment is `queued` or
+`uploading`; this prevents prompts from being sent without their intended
+attachments. Set `allowSubmitWithPendingUploads` only when the host explicitly
+wants to submit text while uploads continue.
+
 Aborts (`AbortError`) drop the entry silently. Other errors flip the chip to
 `error`, fire `onAttachmentError`, and expose a retry button that re-runs the
 handler with the originally selected `File`.
@@ -262,6 +273,23 @@ Reject files that exceed a size or count cap before they enter the queue:
 
 Rejected files surface through `onAttachmentError` and a brief inline toast
 visible to the user (auto-clears after ~3 seconds).
+The same validation path applies to local files without `uploadHandler`, managed
+uploads, drag-and-drop, and pasted images. `accept` is also enforced for dropped
+and pasted files.
+
+## Stop / Cancel
+
+When `streaming` and `onStop` are provided, the built-in send button becomes a
+stop button. Custom send slots can use `canStop` and `stop` from the render
+context.
+
+```tsx
+<CodexChatBox
+  streaming={isRunning}
+  onStop={() => cancelTurn()}
+  onSubmit={sendTurn}
+/>
+```
 
 ## AgentWeb Usage
 
@@ -311,6 +339,8 @@ and pass the resulting local `File` list/chip state through `files` and
   `labels.attach`, `labels.removeFile`, and `labels.send`.
 - `loading` and `streaming` mark the root and textarea busy, render a polite
   `role="status"` indicator, and disable submit/attachment/select controls.
+- Internal async submission marks the root busy with `data-submitting`, renders
+  a polite submitting status, and disables the textarea until the submit settles.
 - `disabled` disables the textarea and controls and sets `aria-disabled` on the
   root.
 

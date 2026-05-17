@@ -123,6 +123,9 @@ and actions such as `submit`, `focus`, `openFilePicker`, `removeFile`,
 - `disabled`, `loading`, and `streaming` prevent built-in submit and file-picker
   actions. Slot render functions receive the same state so host controls can
   mirror the behavior.
+- Async `onSubmit` enters an internal submitting state. The default
+  `clearOnSubmit={true}` clears only after success, while failures keep the
+  draft and call `onSubmitError`.
 - The component makes no network requests. File selection only updates chip
   state and emits callbacks with `File[]` unless the host supplies
   `uploadHandler`; then the component calls only that host callback and surfaces
@@ -226,3 +229,38 @@ interface ChatBoxSubmitPayload {
 The `rawText` and `attachments` fields are always present (`attachments` is
 an empty array when none are uploaded). Consumers that only read `text` and
 `files` remain compatible.
+
+## v0.2 Hardening
+
+### Submit Lifecycle
+
+- Async submits set `submitting` in the slot context and `data-submitting` on
+  the root.
+- `clearOnSubmit={true}` clears after successful submit; rejected submits keep
+  text/files and call `onSubmitError(error, payload)`.
+- `clearOnSubmit="immediate"` preserves the previous fire-and-forget clearing
+  behavior. `false` / `"never"` keeps drafts after submit.
+
+### Pending Upload Safety
+
+- Managed-upload submits are blocked while attachments are `queued` or
+  `uploading` unless `allowSubmitWithPendingUploads` is explicitly set.
+- Slot render functions receive `pendingAttachmentCount`.
+
+### Unified Validation
+
+- `maxFileSize`, `maxFiles`, and `accept` now apply to local-file mode and
+  managed-upload mode, including picker, drag-and-drop, and image paste paths.
+
+### Stop Control
+
+- When `streaming` and `onStop` are provided, the built-in send button becomes
+  a stop button.
+- Slot render functions receive `canStop` and `stop`.
+
+### Interaction Hardening
+
+- Drag hover state uses `dragenter` / `dragleave` depth instead of incrementing
+  on every `dragover`.
+- Image preview blob URLs are created and revoked from component effects rather
+  than during chip render.

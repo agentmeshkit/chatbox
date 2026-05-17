@@ -13,6 +13,12 @@ export const DEFAULT_LABELS_EN: Required<ChatBoxLabels> = {
   retryAttachment: 'Retry upload',
   uploadError: 'Upload failed',
   uploading: 'Uploading...',
+  submitting: 'Submitting',
+  pendingUploads: (count: number) =>
+    count === 1
+      ? 'Wait for 1 attachment to finish uploading'
+      : `Wait for ${count} attachments to finish uploading`,
+  invalidFileType: (f: File) => `File type not accepted: ${f.name}`,
   model: 'Model',
   accessMode: 'Mode',
   send: 'Send',
@@ -29,6 +35,9 @@ export const DEFAULT_LABELS_ZH: Required<ChatBoxLabels> = {
   retryAttachment: '重新上传',
   uploadError: '上传失败',
   uploading: '上传中...',
+  submitting: '提交中',
+  pendingUploads: (count: number) => `请等待 ${count} 个附件上传完成`,
+  invalidFileType: (f: File) => `不支持的文件类型：${f.name}`,
   model: '模型',
   accessMode: '模式',
   send: '发送消息',

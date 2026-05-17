@@ -89,8 +89,12 @@ export interface ChatBoxRenderContext {
   disabled: boolean;
   loading: boolean;
   streaming: boolean;
+  submitting: boolean;
+  pendingAttachmentCount: number;
   canSubmit: boolean;
+  canStop: boolean;
   submit: () => void;
+  stop: () => void;
   focus: () => void;
   clearText: () => void;
   clearFiles: () => void;
@@ -122,6 +126,9 @@ export interface ChatBoxLabels {
   retryAttachment?: string;
   uploadError?: string;
   uploading?: string;
+  submitting?: string;
+  pendingUploads?: (count: number) => string;
+  invalidFileType?: (file: File) => string;
   model?: string;
   accessMode?: string;
   send?: string;
@@ -132,6 +139,8 @@ export interface ChatBoxLabels {
 export type AttachmentTextTemplate =
   | string
   | ((attachments: UploadedAttachment[], text: string) => string);
+
+export type ClearOnSubmitMode = boolean | 'immediate' | 'success' | 'never';
 
 type NativeTextareaProps = Omit<
   TextareaHTMLAttributes<HTMLTextAreaElement>,
@@ -162,6 +171,7 @@ export interface CodexChatBoxProps extends NativeTextareaProps {
   onFilesChange?: (files: File[]) => void;
   onFilesSelected?: (files: File[]) => void;
   onFileRemove?: (file: File, index: number) => void;
+  onSubmitError?: (error: Error, payload: ChatBoxSubmitPayload) => void;
   /** Controlled managed-upload entries. */
   attachments?: AttachmentEntry[];
   defaultAttachments?: AttachmentEntry[];
@@ -181,6 +191,11 @@ export interface CodexChatBoxProps extends NativeTextareaProps {
    * uploaded). Extra files are rejected and reported via onAttachmentError.
    */
   maxFiles?: number;
+  /**
+   * By default, managed-upload submissions are blocked while queued/uploading
+   * files exist so users do not accidentally send a prompt missing attachments.
+   */
+  allowSubmitWithPendingUploads?: boolean;
   /**
    * Final text template applied when attachments are present at submit time.
    * String form supports `{paths}`, `{names}`, `{count}`, `{text}`. Function
@@ -206,7 +221,13 @@ export interface CodexChatBoxProps extends NativeTextareaProps {
   accept?: string;
   multiple?: boolean;
   allowAttachments?: boolean;
-  clearOnSubmit?: boolean;
+  /**
+   * Controls when submitted text/files are cleared. `true` means after a
+   * successful submit; `false`/`never` keeps the draft; `immediate` preserves
+   * the historical fire-and-forget clearing behavior.
+   */
+  clearOnSubmit?: ClearOnSubmitMode;
+  onStop?: () => void | Promise<void>;
   autoResize?: boolean;
   maxTextareaHeight?: number;
   locale?: ChatBoxLocale;

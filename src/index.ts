@@ -15,6 +15,7 @@ export type {
   ChatBoxSlot,
   ChatBoxSlots,
   ChatBoxSubmitPayload,
+  ClearOnSubmitMode,
   CodexChatBoxProps,
   UploadedAttachment,
   UploadHandler,

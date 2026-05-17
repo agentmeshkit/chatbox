@@ -15,9 +15,8 @@ export interface AttachmentChipProps {
   index: number;
   disabled: boolean;
   labels: Required<ChatBoxLabels>;
-  /** Pre-cached object URL store, keyed by entry id. Used to avoid creating
-   * a fresh blob URL on every render. */
-  objectUrls: Map<string, string>;
+  /** Pre-cached object URL store, keyed by entry id. Read-only during render. */
+  objectUrls: ReadonlyMap<string, string>;
   onRetry: (id: string) => void;
   onRemove: (id: string) => void;
 }
@@ -45,23 +44,7 @@ export function AttachmentChip({
   const displaySize = entry.uploaded?.size ?? entry.file?.size ?? 0;
   const mime = entry.uploaded?.mimeType ?? entry.file?.type;
   const isImage = isImageEntry(entry);
-  let thumbUrl: string | undefined;
-  if (isImage) {
-    const cached = objectUrls.get(entry.id);
-    if (cached) {
-      thumbUrl = cached;
-    } else {
-      thumbUrl = pickThumbnailUrl(entry);
-      if (
-        thumbUrl &&
-        !entry.uploaded?.url &&
-        entry.file &&
-        thumbUrl.startsWith('blob:')
-      ) {
-        objectUrls.set(entry.id, thumbUrl);
-      }
-    }
-  }
+  const thumbUrl = isImage ? pickThumbnailUrl(entry, objectUrls) : undefined;
   const badge = extensionBadge(displayName, mime);
   const ariaLabel = labels.removeAttachment({ name: displayName });
 

@@ -87,6 +87,10 @@ Only uploaded entries are submitted in `payload.attachments`; queued,
 uploading, and failed entries remain in the UI. `AbortError` from an upload
 removes the entry without surfacing a failure.
 
+Submit is disabled while managed attachments are queued/uploading unless
+`allowSubmitWithPendingUploads` is set. Use the default for agent prompts that
+must include attached files.
+
 If attachments should be embedded into the final prompt, set
 `attachmentTextTemplate`. String templates support `{paths}`, `{names}`,
 `{count}`, and `{text}`. `payload.rawText` remains the user's original text.
@@ -95,7 +99,8 @@ If attachments should be embedded into the final prompt, set
 
 Slots accept a React node or a render function. Render functions receive
 state and actions such as `submit`, `focus`, `clearText`, `clearFiles`,
-`openFilePicker`, `removeFile`, `removeAttachment`, and `retryAttachment`.
+`openFilePicker`, `removeFile`, `removeAttachment`, `retryAttachment`,
+`submitting`, `pendingAttachmentCount`, `canStop`, and `stop`.
 
 ```tsx
 <CodexChatBox
@@ -113,8 +118,9 @@ state and actions such as `submit`, `focus`, `clearText`, `clearFiles`,
 ## Operational Rules
 
 - Always import `@agentmeshkit/chatbox/styles.css`.
-- `onSubmit` may be async, but the component does not await it before applying
-  `clearOnSubmit`.
+- `onSubmit` may be async. With the default `clearOnSubmit={true}`, the
+  component clears only after successful completion and keeps the draft on
+  rejection. Use `onSubmitError(error, payload)` for failed submits.
 - Submit reads the current textarea DOM value, so uncontrolled and IME input are
   supported.
 - The package does not persist files, upload bytes, start Codex, or grant
@@ -124,5 +130,8 @@ state and actions such as `submit`, `focus`, `clearText`, `clearFiles`,
   `payload.attachments`.
 - `disabled`, `loading`, and `streaming` block built-in submit and attachment
   actions. Mirror these states in custom slot controls.
-- `clearOnSubmit` defaults to `true`; set it to `false` when the host wants to
-  keep draft text/files after submit.
+- If `streaming` and `onStop` are set, the built-in send button becomes a stop
+  button. Custom send slots should call `stop` when `canStop` is true.
+- `clearOnSubmit` defaults to `true` (clear after success); set it to
+  `"immediate"` for fire-and-forget clearing or `false` / `"never"` when the
+  host wants to keep draft text/files after submit.
