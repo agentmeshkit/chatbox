@@ -1,0 +1,32 @@
+{
+  "name": "@agentmeshkit/chatbox",
+  "version": "0.0.0",
+  "private": false,
+  "type": "module",
+  "description": "Reusable React chat input box for coding-agent products.",
+  "license": "MIT",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./styles.css": "./dist/styles.css"
+  },
+  "files": [
+    "dist",
+    "docs"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "react-dom": ">=18"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.28",
+    "typescript": "^5.5.4"
+  }
+}
+
