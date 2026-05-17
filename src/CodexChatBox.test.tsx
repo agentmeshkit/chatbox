@@ -8,7 +8,7 @@ import { CodexChatBox } from './CodexChatBox.js';
 import type { ChatBoxSubmitPayload } from './types.js';
 
 function getTextarea() {
-  return screen.getByLabelText('Message') as HTMLTextAreaElement;
+  return screen.getByLabelText('Message Codex') as HTMLTextAreaElement;
 }
 
 describe('CodexChatBox', () => {
@@ -42,7 +42,9 @@ describe('CodexChatBox', () => {
 
     expect(onSubmit).toHaveBeenCalledWith({
       text: 'hello agent',
+      rawText: 'hello agent',
       files: [],
+      attachments: [],
       model: 'gpt-5',
       accessMode: 'full-access',
       metadata: { source: 'test' },
@@ -63,7 +65,7 @@ describe('CodexChatBox', () => {
     const textarea = getTextarea();
     await user.clear(textarea);
     await user.type(textarea, 'controlled value');
-    await user.click(screen.getByRole('button', { name: 'Send message' }));
+    await user.click(screen.getByRole('button', { name: 'Send' }));
 
     expect(onSubmit).toHaveBeenCalledWith(
       expect.objectContaining({ text: 'controlled value' }),
@@ -135,11 +137,11 @@ describe('CodexChatBox', () => {
       />,
     );
 
-    const root = screen.getByRole('form', { name: 'Chat input' });
+    const root = screen.getByRole('form', { name: 'Composer' });
     expect(root.getAttribute('data-disabled')).toBe('');
     expect(root.getAttribute('aria-disabled')).toBe('true');
     expect(getTextarea()).toHaveProperty('disabled', true);
-    expect(screen.getByRole('button', { name: 'Attach files' })).toHaveProperty(
+    expect(screen.getByRole('button', { name: 'Attach file' })).toHaveProperty(
       'disabled',
       true,
     );
@@ -147,13 +149,13 @@ describe('CodexChatBox', () => {
       'disabled',
       true,
     );
-    expect(screen.getByRole('button', { name: 'Send message' })).toHaveProperty(
+    expect(screen.getByRole('button', { name: 'Send' })).toHaveProperty(
       'disabled',
       true,
     );
 
     fireEvent.keyDown(getTextarea(), { key: 'Enter', metaKey: true });
-    await user.click(screen.getByRole('button', { name: 'Send message' }));
+    await user.click(screen.getByRole('button', { name: 'Send' }));
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
@@ -162,16 +164,16 @@ describe('CodexChatBox', () => {
 
     render(<CodexChatBox defaultValue="wait" loading onSubmit={onSubmit} />);
 
-    const root = screen.getByRole('form', { name: 'Chat input' });
+    const root = screen.getByRole('form', { name: 'Composer' });
     expect(root.getAttribute('data-loading')).toBe('');
     expect(root.getAttribute('aria-busy')).toBe('true');
     expect(getTextarea().getAttribute('aria-busy')).toBe('true');
     expect(screen.getByRole('status').textContent).toContain('Loading');
-    expect(screen.getByRole('button', { name: 'Attach files' })).toHaveProperty(
+    expect(screen.getByRole('button', { name: 'Attach file' })).toHaveProperty(
       'disabled',
       true,
     );
-    expect(screen.getByRole('button', { name: 'Send message' })).toHaveProperty(
+    expect(screen.getByRole('button', { name: 'Send' })).toHaveProperty(
       'disabled',
       true,
     );
@@ -185,11 +187,11 @@ describe('CodexChatBox', () => {
 
     render(<CodexChatBox defaultValue="wait" streaming onSubmit={onSubmit} />);
 
-    const root = screen.getByRole('form', { name: 'Chat input' });
+    const root = screen.getByRole('form', { name: 'Composer' });
     expect(root.getAttribute('data-streaming')).toBe('');
     expect(root.getAttribute('aria-busy')).toBe('true');
     expect(screen.getByRole('status').textContent).toContain('Streaming');
-    expect(screen.getByRole('button', { name: 'Send message' })).toHaveProperty(
+    expect(screen.getByRole('button', { name: 'Send' })).toHaveProperty(
       'disabled',
       true,
     );
@@ -217,7 +219,7 @@ describe('CodexChatBox', () => {
     await user.click(screen.getByRole('button', { name: 'Remove remove.txt' }));
     expect(removed).toHaveBeenCalledWith(remove, 1);
 
-    await user.click(screen.getByRole('button', { name: 'Send message' }));
+    await user.click(screen.getByRole('button', { name: 'Send' }));
     const payload = onSubmit.mock.calls[0][0] as ChatBoxSubmitPayload;
     expect(payload.text).toBe('with files');
     expect(payload.files).toEqual([keep]);

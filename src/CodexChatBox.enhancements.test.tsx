@@ -1,0 +1,546 @@
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { userEvent } from '@testing-library/user-event';
+import { useState } from 'react';
+import { describe, expect, it, vi } from 'vitest';
+import { CodexChatBox } from './CodexChatBox.js';
+import type {
+  AttachmentEntry,
+  ChatBoxSubmitPayload,
+  UploadedAttachment,
+  UploadHandler,
+} from './types.js';
+
+function getTextarea(label = 'Message Codex') {
+  return screen.getByLabelText(label) as HTMLTextAreaElement;
+}
+
+// Polyfill URL.createObjectURL for jsdom so chip thumbnails do not throw. The
+// returned string is enough for src= assertions.
+beforeAll(() => {
+  if (typeof URL.createObjectURL !== 'function') {
+    let counter = 0;
+    Object.defineProperty(URL, 'createObjectURL', {
+      configurable: true,
+      writable: true,
+      value: () => `blob:mock-${counter++}`,
+    });
+  }
+  if (typeof URL.revokeObjectURL !== 'function') {
+    Object.defineProperty(URL, 'revokeObjectURL', {
+      configurable: true,
+      writable: true,
+      value: () => undefined,
+    });
+  }
+});
+
+describe('CodexChatBox managed upload', () => {
+  it('walks an entry from queued -> uploading -> uploaded', async () => {
+    let resolveUpload: ((value: UploadedAttachment) => void) | null = null;
+    const uploadHandler = vi.fn<UploadHandler>(() =>
+      new Promise<UploadedAttachment>((resolve) => {
+        resolveUpload = resolve;
+      }),
+    );
+
+    render(
+      <CodexChatBox onSubmit={vi.fn()} uploadHandler={uploadHandler} />,
+    );
+
+    const file = new File(['hi'], 'note.txt', { type: 'text/plain' });
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    await act(async () => {
+      await userEvent.upload(input, file);
+    });
+
+    await waitFor(() => {
+      expect(uploadHandler).toHaveBeenCalledTimes(1);
+    });
+    // Chip should reflect uploading state.
+    const chip = screen.getByTestId('chatbox-attachment-0');
+    expect(chip.getAttribute('data-status')).toBe('uploading');
+
+    await act(async () => {
+      resolveUpload?.({
+        name: 'note.txt',
+        size: 2,
+        relPath: 'attachments/note.txt',
+        mimeType: 'text/plain',
+      });
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      const updated = screen.getByTestId('chatbox-attachment-0');
+      expect(updated.getAttribute('data-status')).toBe('uploaded');
+    });
+  });
+
+  it('marks entry as error and invokes onAttachmentError on rejection', async () => {
+    const uploadHandler = vi.fn<UploadHandler>(() =>
+      Promise.reject(new Error('boom')),
+    );
+    const onAttachmentError = vi.fn();
+
+    render(
+      <CodexChatBox
+        onSubmit={vi.fn()}
+        uploadHandler={uploadHandler}
+        onAttachmentError={onAttachmentError}
+      />,
+    );
+
+    const file = new File(['x'], 'broken.png', { type: 'image/png' });
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    await act(async () => {
+      await userEvent.upload(input, file);
+    });
+
+    await waitFor(() => {
+      const chip = screen.getByTestId('chatbox-attachment-0');
+      expect(chip.getAttribute('data-status')).toBe('error');
+    });
+    expect(onAttachmentError).toHaveBeenCalledTimes(1);
+    const [entry, error] = onAttachmentError.mock.calls[0] as [
+      AttachmentEntry,
+      Error,
+    ];
+    expect(entry.status).toBe('error');
+    expect(entry.error).toBe('boom');
+    expect(error.message).toBe('boom');
+  });
+
+  it('aborts the upload AbortSignal when the chip is removed', async () => {
+    let observedSignal: AbortSignal | null = null;
+    const uploadHandler = vi.fn<UploadHandler>(
+      (_file, ctx) =>
+        new Promise<UploadedAttachment>((_resolve, reject) => {
+          observedSignal = ctx.signal;
+          ctx.signal.addEventListener('abort', () => {
+            const err = new Error('aborted');
+            err.name = 'AbortError';
+            reject(err);
+          });
+        }),
+    );
+
+    render(
+      <CodexChatBox onSubmit={vi.fn()} uploadHandler={uploadHandler} />,
+    );
+
+    const file = new File(['x'], 'aborted.bin');
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    await act(async () => {
+      await userEvent.upload(input, file);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('chatbox-attachment-0')).toBeTruthy();
+    });
+
+    const removeButton = screen.getByRole('button', { name: /Remove aborted.bin/ });
+    await act(async () => {
+      await userEvent.click(removeButton);
+      await Promise.resolve();
+    });
+
+    expect(observedSignal?.aborted).toBe(true);
+    expect(screen.queryByTestId('chatbox-attachment-0')).toBeNull();
+  });
+
+  it('retries a failed upload by re-invoking uploadHandler', async () => {
+    const uploadHandler = vi
+      .fn<UploadHandler>()
+      .mockRejectedValueOnce(new Error('first fail'))
+      .mockResolvedValue({
+        name: 'retry.txt',
+        size: 4,
+        relPath: 'attachments/retry.txt',
+      });
+
+    render(
+      <CodexChatBox onSubmit={vi.fn()} uploadHandler={uploadHandler} />,
+    );
+
+    const file = new File(['data'], 'retry.txt', { type: 'text/plain' });
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    await act(async () => {
+      await userEvent.upload(input, file);
+    });
+
+    await waitFor(() => {
+      const chip = screen.getByTestId('chatbox-attachment-0');
+      expect(chip.getAttribute('data-status')).toBe('error');
+    });
+
+    const retry = screen.getByRole('button', { name: /Retry upload/ });
+    await act(async () => {
+      await userEvent.click(retry);
+    });
+
+    await waitFor(() => {
+      const chip = screen.getByTestId('chatbox-attachment-0');
+      expect(chip.getAttribute('data-status')).toBe('uploaded');
+    });
+    expect(uploadHandler).toHaveBeenCalledTimes(2);
+  });
+
+  it('renders chips for externally controlled attachments', async () => {
+    const uploadHandler = vi.fn<UploadHandler>();
+    function Controlled() {
+      const [entries, setEntries] = useState<AttachmentEntry[]>([]);
+      return (
+        <>
+          <button
+            type="button"
+            onClick={() =>
+              setEntries([
+                {
+                  id: 'ext-1',
+                  status: 'uploaded',
+                  uploaded: {
+                    id: 'ext-1',
+                    name: 'remote.pdf',
+                    size: 100,
+                    relPath: 'attachments/remote.pdf',
+                    mimeType: 'application/pdf',
+                  },
+                  createdAt: Date.now(),
+                },
+              ])
+            }
+          >
+            inject
+          </button>
+          <CodexChatBox
+            onSubmit={vi.fn()}
+            uploadHandler={uploadHandler}
+            attachments={entries}
+            onAttachmentsChange={setEntries}
+          />
+        </>
+      );
+    }
+    render(<Controlled />);
+
+    expect(screen.queryByText('remote.pdf')).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'inject' }));
+    expect(screen.getByText('remote.pdf')).toBeTruthy();
+  });
+});
+
+describe('CodexChatBox attachment template', () => {
+  it('renders placeholders {paths}, {names}, {count}, {text}', async () => {
+    const onSubmit = vi.fn();
+    const uploadHandler = vi.fn<UploadHandler>(async (file) => ({
+      name: file.name,
+      size: file.size,
+      relPath: `uploads/${file.name}`,
+      mimeType: file.type,
+    }));
+
+    render(
+      <CodexChatBox
+        onSubmit={onSubmit}
+        uploadHandler={uploadHandler}
+        defaultValue="hello"
+        attachmentTextTemplate="[files: {paths} | names: {names} | count: {count}] {text}"
+      />,
+    );
+
+    const file = new File(['ok'], 'a.png', { type: 'image/png' });
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    await act(async () => {
+      await userEvent.upload(input, file);
+    });
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('chatbox-attachment-0').getAttribute('data-status'),
+      ).toBe('uploaded');
+    });
+
+    fireEvent.keyDown(getTextarea(), { key: 'Enter', metaKey: true });
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    const payload = onSubmit.mock.calls[0][0] as ChatBoxSubmitPayload;
+    expect(payload.text).toBe(
+      '[files: uploads/a.png | names: a.png | count: 1] hello',
+    );
+    expect(payload.rawText).toBe('hello');
+    expect(payload.attachments).toHaveLength(1);
+  });
+
+  it('passes (attachments, text) to template function', async () => {
+    const onSubmit = vi.fn();
+    const template = vi.fn(
+      (atts: UploadedAttachment[], text: string) =>
+        `${atts.map((a) => a.name).join(',')}::${text}`,
+    );
+    const uploadHandler: UploadHandler = async (file) => ({
+      name: file.name,
+      size: file.size,
+      mimeType: file.type,
+    });
+
+    render(
+      <CodexChatBox
+        onSubmit={onSubmit}
+        uploadHandler={uploadHandler}
+        defaultValue="hi"
+        attachmentTextTemplate={template}
+      />,
+    );
+
+    const file = new File(['ok'], 'fn.txt', { type: 'text/plain' });
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    await act(async () => {
+      await userEvent.upload(input, file);
+    });
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('chatbox-attachment-0').getAttribute('data-status'),
+      ).toBe('uploaded');
+    });
+
+    fireEvent.keyDown(getTextarea(), { key: 'Enter', metaKey: true });
+    expect(template).toHaveBeenCalledTimes(1);
+    const callArgs = template.mock.calls[0];
+    expect(callArgs[0]).toHaveLength(1);
+    expect(callArgs[0][0].name).toBe('fn.txt');
+    expect(callArgs[1]).toBe('hi');
+    const payload = onSubmit.mock.calls[0][0] as ChatBoxSubmitPayload;
+    expect(payload.text).toBe('fn.txt::hi');
+  });
+
+  it('does not apply the template when no attachments are present', () => {
+    const onSubmit = vi.fn();
+    render(
+      <CodexChatBox
+        onSubmit={onSubmit}
+        defaultValue="plain text"
+        attachmentTextTemplate="[wrap] {text}"
+      />,
+    );
+    fireEvent.keyDown(getTextarea(), { key: 'Enter', metaKey: true });
+    const payload = onSubmit.mock.calls[0][0] as ChatBoxSubmitPayload;
+    expect(payload.text).toBe('plain text');
+    expect(payload.rawText).toBe('plain text');
+    expect(payload.attachments).toEqual([]);
+  });
+});
+
+describe('CodexChatBox drag-drop and paste', () => {
+  it('accepts files dropped on the root and routes them through the picker pipeline', async () => {
+    const onFilesSelected = vi.fn();
+    render(
+      <CodexChatBox
+        onSubmit={vi.fn()}
+        onFilesSelected={onFilesSelected}
+      />,
+    );
+
+    const root = screen.getByRole('form', { name: 'Composer' });
+    const file = new File(['drop'], 'dropped.txt', { type: 'text/plain' });
+    const data = {
+      files: [file],
+      items: [],
+      types: ['Files'],
+    } as unknown as DataTransfer;
+
+    fireEvent.dragOver(root, { dataTransfer: data });
+    expect(root.getAttribute('data-amk-dragover')).toBe('true');
+    fireEvent.drop(root, { dataTransfer: data });
+
+    expect(onFilesSelected).toHaveBeenCalledWith([file]);
+    expect(screen.getByText('dropped.txt')).toBeTruthy();
+    expect(root.getAttribute('data-amk-dragover')).toBeNull();
+  });
+
+  it('ignores drag events that do not carry files', () => {
+    render(<CodexChatBox onSubmit={vi.fn()} onFilesSelected={vi.fn()} />);
+    const root = screen.getByRole('form', { name: 'Composer' });
+    fireEvent.dragOver(root, {
+      dataTransfer: { types: ['text/plain'], files: [] } as unknown as DataTransfer,
+    });
+    expect(root.getAttribute('data-amk-dragover')).toBeNull();
+  });
+
+  it('auto-attaches pasted image files', async () => {
+    const onFilesSelected = vi.fn();
+    render(
+      <CodexChatBox onSubmit={vi.fn()} onFilesSelected={onFilesSelected} />,
+    );
+    const file = new File(['png'], 'paste.png', { type: 'image/png' });
+    const clipboardData = {
+      items: [
+        {
+          kind: 'file',
+          type: 'image/png',
+          getAsFile: () => file,
+        },
+      ],
+      types: ['Files'],
+      files: [file],
+    } as unknown as DataTransfer;
+    fireEvent.paste(getTextarea(), { clipboardData });
+    expect(onFilesSelected).toHaveBeenCalledWith([file]);
+    expect(screen.getByText('paste.png')).toBeTruthy();
+  });
+});
+
+describe('CodexChatBox i18n', () => {
+  it('renders Chinese labels when locale="zh"', () => {
+    render(<CodexChatBox onSubmit={vi.fn()} locale="zh" />);
+    expect(screen.getByRole('form', { name: '消息输入区' })).toBeTruthy();
+    expect(
+      screen.getByRole('button', { name: '上传附件' }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole('button', { name: '发送消息' }),
+    ).toBeTruthy();
+    expect(screen.getByLabelText('说点什么…')).toBeTruthy();
+  });
+
+  it('shallow-merges labels overrides on top of the chosen locale', () => {
+    render(
+      <CodexChatBox
+        onSubmit={vi.fn()}
+        locale="zh"
+        labels={{ send: '提交' }}
+      />,
+    );
+    expect(screen.getByRole('button', { name: '提交' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: '上传附件' })).toBeTruthy();
+  });
+});
+
+describe('CodexChatBox validation', () => {
+  it('rejects files exceeding maxFileSize and triggers onAttachmentError', async () => {
+    const onAttachmentError = vi.fn();
+    const uploadHandler = vi.fn<UploadHandler>();
+    render(
+      <CodexChatBox
+        onSubmit={vi.fn()}
+        uploadHandler={uploadHandler}
+        maxFileSize={4}
+        onAttachmentError={onAttachmentError}
+      />,
+    );
+
+    const tooBig = new File(['1234567890'], 'big.bin');
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    await act(async () => {
+      await userEvent.upload(input, tooBig);
+    });
+
+    expect(uploadHandler).not.toHaveBeenCalled();
+    expect(onAttachmentError).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId('chatbox-attachment-0')).toBeNull();
+    expect(screen.getByTestId('chatbox-validation-toast').textContent).toContain(
+      'File too large',
+    );
+  });
+
+  it('rejects files exceeding maxFiles cap', async () => {
+    const onAttachmentError = vi.fn();
+    const uploadHandler = vi.fn<UploadHandler>(async (file) => ({
+      name: file.name,
+      size: file.size,
+    }));
+    render(
+      <CodexChatBox
+        onSubmit={vi.fn()}
+        uploadHandler={uploadHandler}
+        maxFiles={1}
+        onAttachmentError={onAttachmentError}
+      />,
+    );
+
+    const a = new File(['a'], 'a.txt');
+    const b = new File(['b'], 'b.txt');
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    await act(async () => {
+      await userEvent.upload(input, [a, b]);
+    });
+
+    await waitFor(() => {
+      expect(onAttachmentError).toHaveBeenCalled();
+    });
+    expect(uploadHandler).toHaveBeenCalledTimes(1);
+    expect(uploadHandler.mock.calls[0][0]).toBe(a);
+    expect(screen.queryByText('b.txt')).toBeNull();
+  });
+});
+
+describe('CodexChatBox backward compatibility', () => {
+  it('keeps legacy files + onFilesSelected pipeline when no uploadHandler is provided', async () => {
+    const onFilesSelected = vi.fn();
+    const onFilesChange = vi.fn();
+    const file = new File(['legacy'], 'legacy.md', { type: 'text/markdown' });
+
+    render(
+      <CodexChatBox
+        onSubmit={vi.fn()}
+        onFilesSelected={onFilesSelected}
+        onFilesChange={onFilesChange}
+      />,
+    );
+
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    await userEvent.upload(input, file);
+
+    expect(onFilesSelected).toHaveBeenCalledWith([file]);
+    expect(onFilesChange).toHaveBeenCalledWith([file]);
+    expect(screen.getByText('legacy.md')).toBeTruthy();
+    // No managed-attachment chip should exist (no uploadHandler).
+    expect(screen.queryByTestId('chatbox-attachment-0')).toBeNull();
+  });
+});
+
+describe('CodexChatBox image preview', () => {
+  it('renders an <img> thumbnail for image-typed managed entries', async () => {
+    const uploadHandler: UploadHandler = async (file) => ({
+      name: file.name,
+      size: file.size,
+      mimeType: file.type,
+      url: 'https://example.com/img.png',
+    });
+
+    render(<CodexChatBox onSubmit={vi.fn()} uploadHandler={uploadHandler} />);
+    const file = new File(['png'], 'pic.png', { type: 'image/png' });
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    await act(async () => {
+      await userEvent.upload(input, file);
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('chatbox-attachment-0').getAttribute('data-status'),
+      ).toBe('uploaded');
+    });
+    const chip = screen.getByTestId('chatbox-attachment-0');
+    const img = chip.querySelector('img.amk-chatbox__chip-thumb');
+    expect(img).toBeTruthy();
+    expect((img as HTMLImageElement).src).toBe('https://example.com/img.png');
+  });
+
+  it('renders an extension badge for non-image entries', async () => {
+    const uploadHandler: UploadHandler = async (file) => ({
+      name: file.name,
+      size: file.size,
+      mimeType: file.type,
+    });
+    render(<CodexChatBox onSubmit={vi.fn()} uploadHandler={uploadHandler} />);
+    const file = new File(['x'], 'docs.pdf', { type: 'application/pdf' });
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    await act(async () => {
+      await userEvent.upload(input, file);
+    });
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('chatbox-attachment-0').getAttribute('data-status'),
+      ).toBe('uploaded');
+    });
+    const chip = screen.getByTestId('chatbox-attachment-0');
+    expect(chip.querySelector('.amk-chatbox__chip-badge')?.textContent).toBe('PDF');
+  });
+});

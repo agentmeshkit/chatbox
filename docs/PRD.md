@@ -132,3 +132,78 @@ and actions such as `submit`, `focus`, `openFilePicker`, `removeFile`,
 3. Add React Testing Library/Vitest behavior tests. Done.
 4. Add browser/Playwright visual tests. Follow-up.
 5. Publish `0.1.0`.
+
+## v0.1 Enhancements
+
+The following capabilities were added on top of the MVP. They are
+all additive: hosts not opting in (no `uploadHandler`, no `locale`, no
+template, no validation caps) keep the original MVP behavior, and the
+existing `files` / `onFilesSelected` / `onSubmit({ text, files })` contract
+continues to work.
+
+### Managed Upload
+
+- `uploadHandler(file, { signal, reportProgress })` runs uploads inside the
+  chatbox.
+- Entries flow `queued` -> `uploading` -> `uploaded`, or `error` on rejection.
+- Per-entry `AbortController`; removing a chip or unmounting aborts.
+- Concurrency capped at `maxConcurrentUploads` (default 4).
+- `AbortError` rejections drop the entry silently. Other errors fire
+  `onAttachmentError` and surface a `Retry upload` button.
+- `attachments` / `defaultAttachments` / `onAttachmentsChange` mirror the
+  controlled/uncontrolled split used for text and files.
+
+### Drag-and-Drop and Paste
+
+- The root element listens for `dragover` / `dragleave` / `drop` with file
+  payloads and forwards them through the same pipeline as the picker.
+- The textarea handles image pastes (`clipboardData.items` with
+  `kind === 'file'` and `type.startsWith('image/')`).
+- `data-amk-dragover="true"` is set during a file drag, available for CSS.
+
+### Attachment Text Template
+
+- `attachmentTextTemplate?: string | (attachments, text) => string`.
+- String placeholders: `{paths}`, `{names}`, `{count}`, `{text}`.
+- Template renders only when there is at least one uploaded attachment.
+
+### Image Preview / Type Badge
+
+- Chips with `mimeType.startsWith('image/')` render a 24x24 thumbnail (using
+  the uploaded `url` when present, falling back to `URL.createObjectURL`).
+- Non-image chips show a text badge derived from the MIME type or file
+  extension (e.g. `PDF`, `ZIP`, `TXT`, `FILE`).
+- Object URLs are tracked and revoked on chip removal / unmount.
+
+### i18n Locale
+
+- `locale: 'en' | 'zh'` selects a built-in dictionary.
+- `labels` are shallow-merged on top of the selected locale.
+- `DEFAULT_LABELS_EN` / `DEFAULT_LABELS_ZH` are exported for reuse.
+
+### Client-Side Validation
+
+- `maxFileSize` rejects oversized files before they enter the queue.
+- `maxFiles` caps the total number of entries (queued + uploading + uploaded).
+- Rejections call `onAttachmentError(syntheticEntry, error)` and surface an
+  inline toast that auto-clears after about 3 seconds.
+
+### Updated Payload Shape
+
+```ts
+interface ChatBoxSubmitPayload {
+  /** Final text, template-rendered when attachments are present. */
+  text: string;
+  /** Raw textarea text, unaffected by attachmentTextTemplate. */
+  rawText: string;
+  files: File[];
+  attachments: UploadedAttachment[];
+  model?: string;
+  accessMode?: string;
+  metadata?: Record<string, unknown>;
+}
+```
+
+The `rawText` and `attachments` fields are always present (`attachments` is
+an empty array when none are uploaded). Consumers that only read `text` and
+`files` remain compatible.

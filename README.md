@@ -114,6 +114,110 @@ the submit payload. It does not upload files or make network requests.
 />
 ```
 
+## Managed Upload
+
+Provide an `uploadHandler` and the chatbox runs the upload state machine
+itself: it queues files, calls the handler with concurrency `<=
+maxConcurrentUploads`, surfaces `queued | uploading | uploaded | error` chip
+state, and exposes a retry button on failed entries. The host receives the
+uploaded payload via `attachments` on submit.
+
+```tsx
+<CodexChatBox
+  onSubmit={({ text, attachments }) => sendTurn(text, attachments)}
+  uploadHandler={async (file, { signal, reportProgress }) => {
+    const res = await fetch('/api/upload', {
+      method: 'POST',
+      body: file,
+      signal,
+    });
+    reportProgress?.(1);
+    const data = (await res.json()) as { relPath: string; url: string };
+    return {
+      name: file.name,
+      size: file.size,
+      mimeType: file.type,
+      relPath: data.relPath,
+      url: data.url,
+    };
+  }}
+/>
+```
+
+Aborts (`AbortError`) drop the entry silently. Other errors flip the chip to
+`error`, fire `onAttachmentError`, and expose a retry button that re-runs the
+handler with the originally selected `File`.
+
+## Drag & Drop / Paste
+
+The root element accepts file drops and the textarea accepts image pastes.
+Both pipelines route through the same code path as the file picker, so
+`uploadHandler` (if provided) is invoked for dropped and pasted files too.
+
+```tsx
+<CodexChatBox
+  onSubmit={sendTurn}
+  uploadHandler={uploadFile}
+/>
+// Drag a PNG over the box -> chip appears; paste a screenshot in the textarea
+// -> chip appears.
+```
+
+## Attachment Text Template
+
+When attachments are present, the host can shape the final `text` sent to the
+agent via `attachmentTextTemplate`.
+
+```tsx
+<CodexChatBox
+  onSubmit={sendTurn}
+  uploadHandler={uploadFile}
+  attachmentTextTemplate="[attachments: {paths}]\n{text}"
+/>
+```
+
+Available placeholders: `{paths}` (comma-joined `relPath` or `name`),
+`{names}`, `{count}`, `{text}`. For full control, pass a function:
+
+```tsx
+attachmentTextTemplate={(attachments, text) =>
+  `<<files>>${attachments.map((a) => a.relPath).join(',')}<<end>>\n${text}`
+}
+```
+
+The user's original text is always preserved in `payload.rawText`. When the
+attachments array is empty, `payload.text` equals `payload.rawText` regardless
+of the template.
+
+## i18n
+
+Set `locale="zh"` for the bundled Chinese labels, or stay on the default
+English. Both can be partially overridden via `labels`.
+
+```tsx
+<CodexChatBox locale="zh" labels={{ send: '提交' }} onSubmit={sendTurn} />
+```
+
+The exported `DEFAULT_LABELS_EN` and `DEFAULT_LABELS_ZH` dictionaries are
+available for hosts that want to extend or reuse them.
+
+## Validation
+
+Reject files that exceed a size or count cap before they enter the queue:
+
+```tsx
+<CodexChatBox
+  onSubmit={sendTurn}
+  uploadHandler={uploadFile}
+  maxFileSize={10 * 1024 * 1024}
+  maxFiles={4}
+  onAttachmentError={(entry, error) => console.warn(entry.id, error.message)}
+/>
+```
+
+Rejected files surface through `onAttachmentError` and a brief inline toast
+visible to the user (auto-clears after ~3 seconds).
+
 ## AgentWeb Usage
 
 AgentWeb can replace its local composer shell with this package while keeping
