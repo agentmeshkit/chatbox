@@ -27,6 +27,8 @@ inside a transcript renderer package or inside AgentWeb business logic.
 - Handle keyboard shortcuts, IME-safe submit, disabled/streaming states, and
   attachment chips.
 - Theme through CSS variables.
+- Provide documentation that is clear for both human host-app authors and AI
+  agents performing integrations.
 
 ## Non-Goals
 
@@ -65,25 +67,37 @@ The package exports:
 
 - `CodexChatBox`
 - `AgentChatBox`
+- `DEFAULT_LABELS_EN`
+- `DEFAULT_LABELS_ZH`
+- `resolveLabels`
 - `ChatBoxSubmitPayload`
 - `CodexChatBoxProps`
-- slot and option helper types
+- attachment, upload, slot, label, locale, and option helper types
 
 Text can be controlled with `value` / `onChange` or uncontrolled with
 `defaultValue`. Attachments can be controlled with `files` / `onFilesChange` or
-uncontrolled with `defaultFiles`.
+uncontrolled with `defaultFiles`. Managed-upload entries can be controlled with
+`attachments` / `onAttachmentsChange` or uncontrolled with
+`defaultAttachments`.
 
 Submit payload shape:
 
 ```ts
 interface ChatBoxSubmitPayload {
+  /** Final text, template-rendered when uploaded attachments are present. */
   text: string;
+  /** Raw textarea text, unaffected by attachmentTextTemplate. */
+  rawText: string;
   files: File[];
+  attachments: UploadedAttachment[];
   model?: string;
   accessMode?: string;
   metadata?: Record<string, unknown>;
 }
 ```
+
+`rawText` and `attachments` are always present. Consumers that only read `text`
+and `files` remain compatible.
 
 Slots:
 
@@ -110,9 +124,14 @@ and actions such as `submit`, `focus`, `openFilePicker`, `removeFile`,
   actions. Slot render functions receive the same state so host controls can
   mirror the behavior.
 - The component makes no network requests. File selection only updates chip
-  state and emits callbacks with `File[]`.
+  state and emits callbacks with `File[]` unless the host supplies
+  `uploadHandler`; then the component calls only that host callback and surfaces
+  queue/progress/retry state.
 - Styles are distributed as `@agentmeshkit/chatbox/styles.css` and use
   `--amk-chatbox-*` variables for theming.
+- README.md is the caller-facing integration contract. `docs/AI_AGENT_INTEGRATION.md`
+  is the compact agent-facing contract for automated integrations and should
+  stay aligned with exported types.
 
 ## Acceptance Criteria
 

@@ -19,7 +19,10 @@ import '@agentmeshkit/chatbox/styles.css';
 
 ```tsx
 import { useState } from 'react';
-import { CodexChatBox, type ChatBoxSubmitPayload } from '@agentmeshkit/chatbox';
+import {
+  CodexChatBox,
+  type ChatBoxSubmitPayload,
+} from '@agentmeshkit/chatbox';
 import '@agentmeshkit/chatbox/styles.css';
 
 export function ChatInput() {
@@ -55,6 +58,42 @@ and does not require a dev server.
 Submit uses the current textarea DOM value, not only React state. This keeps
 uncontrolled usage resilient to IME composition and the textarea `onChange`
 loss mode seen in earlier AgentWeb composer implementations.
+
+For a compact guide intended to be pasted into AI agent context, see
+[`docs/AI_AGENT_INTEGRATION.md`](docs/AI_AGENT_INTEGRATION.md).
+
+## Public Contract
+
+The package exports the component, its AgentWeb-compatible alias, label
+dictionaries, and TypeScript helper types:
+
+```tsx
+import {
+  AgentChatBox,
+  CodexChatBox,
+  DEFAULT_LABELS_EN,
+  DEFAULT_LABELS_ZH,
+  type AttachmentEntry,
+  type ChatBoxSubmitPayload,
+  type CodexChatBoxProps,
+  type UploadedAttachment,
+  type UploadHandler,
+} from '@agentmeshkit/chatbox';
+import '@agentmeshkit/chatbox/styles.css';
+```
+
+`onSubmit(payload)` receives:
+
+- `text`: final text. If uploaded attachments exist and
+  `attachmentTextTemplate` is set, this is the rendered template output.
+- `rawText`: original trimmed textarea text, before attachment templating.
+- `files`: selected local `File[]` when `uploadHandler` is not used.
+- `attachments`: uploaded attachment metadata when `uploadHandler` is used.
+  Always present; empty when there are no uploaded attachments.
+- `model`, `accessMode`, `metadata`: host-provided routing context.
+
+`accessMode` is display and routing metadata. Treat permissions, sandboxing,
+and execution policy as backend decisions rather than trusting the UI value.
 
 ## Slots
 
@@ -103,7 +142,8 @@ Built-in selectors can be used with options:
 ## Attachments
 
 The component renders attachment chips and exposes selected `File` objects in
-the submit payload. It does not upload files or make network requests.
+the submit payload. Without `uploadHandler`, it does not upload files or make
+network requests; the host owns persistence and backend handoff.
 
 ```tsx
 <CodexChatBox
@@ -143,6 +183,11 @@ uploaded payload via `attachments` on submit.
   }}
 />
 ```
+
+In managed-upload mode, newly selected, dropped, or pasted files move through
+`AttachmentEntry` states. Only entries with `status === 'uploaded'` are included
+in `payload.attachments` on submit; pending and failed entries remain visible
+for the user to wait, remove, or retry.
 
 Aborts (`AbortError`) drop the entry silently. Other errors flip the chip to
 `error`, fire `onAttachmentError`, and expose a retry button that re-runs the
