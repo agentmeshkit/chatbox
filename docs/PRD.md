@@ -37,9 +37,10 @@ inside a transcript renderer package or inside AgentWeb business logic.
 
 ## MVP Scope
 
-- `CodexChatBox` React component.
+- `CodexChatBox` React component, plus `AgentChatBox` alias.
 - `ChatBoxSubmitPayload` type with text, files, model, access mode, and metadata.
-- Attachment chip rendering and file picker callbacks.
+- Attachment chip rendering and file picker callbacks. Uploading remains a host-app
+  responsibility.
 - Send button states and keyboard shortcuts.
 - CSS variable theme contract.
 - Accessibility labels and focus management.
@@ -58,18 +59,76 @@ inside a transcript renderer package or inside AgentWeb business logic.
 />
 ```
 
+## Implemented API
+
+The package exports:
+
+- `CodexChatBox`
+- `AgentChatBox`
+- `ChatBoxSubmitPayload`
+- `CodexChatBoxProps`
+- slot and option helper types
+
+Text can be controlled with `value` / `onChange` or uncontrolled with
+`defaultValue`. Attachments can be controlled with `files` / `onFilesChange` or
+uncontrolled with `defaultFiles`.
+
+Submit payload shape:
+
+```ts
+interface ChatBoxSubmitPayload {
+  text: string;
+  files: File[];
+  model?: string;
+  accessMode?: string;
+  metadata?: Record<string, unknown>;
+}
+```
+
+Slots:
+
+- `leftTools`
+- `modelSelector`
+- `accessModeSelector`
+- `voiceButton`
+- `sendButton`
+- `loadingIndicator`
+
+Each slot may be a React node or a render function receiving component state
+and actions such as `submit`, `focus`, `openFilePicker`, `removeFile`,
+`clearText`, and `clearFiles`.
+
+## Implementation Notes
+
+- The component uses a native textarea and reads `textareaRef.current.value` at
+  submit time. Controlled mode is still supported, but submit does not depend
+  only on React `onChange` state.
+- IME composition is tracked explicitly. `Cmd+Enter` / `Ctrl+Enter` is ignored
+  while composition is active.
+- `Shift+Enter` is left to the native textarea and creates a newline.
+- `disabled`, `loading`, and `streaming` prevent built-in submit and file-picker
+  actions. Slot render functions receive the same state so host controls can
+  mirror the behavior.
+- The component makes no network requests. File selection only updates chip
+  state and emits callbacks with `File[]`.
+- Styles are distributed as `@agentmeshkit/chatbox/styles.css` and use
+  `--amk-chatbox-*` variables for theming.
+
 ## Acceptance Criteria
 
 - Component renders cleanly on desktop and mobile widths.
 - Submit works with mouse and keyboard without losing IME text.
 - Host apps can fully control model/access-mode UI through props or slots.
 - No network calls are made by the component itself.
-- Visual fixtures cover empty, filled, uploading, disabled, and streaming states.
+- React Testing Library/Vitest coverage includes controlled/uncontrolled text,
+  keyboard submit, IME guard, attachment chips, file picker callbacks, and slots.
+- Visual fixtures for empty, filled, uploading, disabled, and streaming states
+  remain a post-MVP follow-up.
 
 ## Milestones
 
-1. Build controlled textarea MVP.
-2. Add slot architecture and attachment chips.
-3. Add browser/Playwright visual tests.
-4. Publish `0.1.0`.
-
+1. Build controlled/uncontrolled textarea MVP. Done.
+2. Add slot architecture and attachment chips. Done.
+3. Add React Testing Library/Vitest behavior tests. Done.
+4. Add browser/Playwright visual tests. Follow-up.
+5. Publish `0.1.0`.
