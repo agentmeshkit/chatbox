@@ -123,6 +123,8 @@ export interface ChatBoxLabels {
   root?: string;
   textarea?: string;
   attach?: string;
+  attachFiles?: string;
+  attachFolder?: string;
   removeFile?: (file: File) => string;
   removeAttachment?: (attachment: { name: string }) => string;
   retryAttachment?: string;

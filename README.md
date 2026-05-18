@@ -152,6 +152,13 @@ The component renders attachment chips and exposes selected `File` objects in
 the submit payload. Without `uploadHandler`, it does not upload files or make
 network requests; the host owns persistence and backend handoff.
 
+The built-in `+` control opens an attachment menu with:
+
+- `Add files or photos`: opens the regular file picker.
+- `Add folder`: opens a directory picker in browsers that support
+  `webkitdirectory`; selected files are passed through the same attachment
+  pipeline as regular files.
+
 ```tsx
 <CodexChatBox
   defaultFiles={initialFiles}

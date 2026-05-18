@@ -149,9 +149,12 @@ export function CodexChatBox({
   const textareaId = id ?? `amk-chatbox-${generatedId}`;
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const folderInputRef = useRef<HTMLInputElement>(null);
   const composingRef = useRef(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  const attachmentMenuRef = useRef<HTMLDivElement>(null);
   const dragDepthRef = useRef(0);
+  const [isAttachmentMenuOpen, setIsAttachmentMenuOpen] = useState(false);
 
   const isTextControlled = value !== undefined;
   const [internalText, setInternalText] = useState(defaultValue);
@@ -568,8 +571,59 @@ export function CodexChatBox({
 
   const openFilePicker = useCallback(() => {
     if (isBusy || !allowAttachments) return;
+    setIsAttachmentMenuOpen(false);
     fileInputRef.current?.click();
   }, [allowAttachments, isBusy]);
+
+  const openFolderPicker = useCallback(() => {
+    if (isBusy || !allowAttachments) return;
+    setIsAttachmentMenuOpen(false);
+    folderInputRef.current?.click();
+  }, [allowAttachments, isBusy]);
+
+  const toggleAttachmentMenu = useCallback(() => {
+    if (isBusy || !allowAttachments) return;
+    setIsAttachmentMenuOpen((isOpen) => !isOpen);
+  }, [allowAttachments, isBusy]);
+
+  useEffect(() => {
+    const input = folderInputRef.current;
+    if (!input) return;
+    input.setAttribute('webkitdirectory', '');
+    input.setAttribute('directory', '');
+  }, []);
+
+  useEffect(() => {
+    if (isBusy || !allowAttachments) {
+      setIsAttachmentMenuOpen(false);
+    }
+  }, [allowAttachments, isBusy]);
+
+  useEffect(() => {
+    if (!isAttachmentMenuOpen) return undefined;
+
+    const closeOnPointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      const menuRoot = attachmentMenuRef.current;
+      if (!(target instanceof Node) || !menuRoot || menuRoot.contains(target)) {
+        return;
+      }
+      setIsAttachmentMenuOpen(false);
+    };
+
+    const closeOnEscape = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsAttachmentMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('pointerdown', closeOnPointerDown);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeOnPointerDown);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [isAttachmentMenuOpen]);
 
   const resolveMetadata = useCallback(() => {
     if (typeof metadata === 'function') return metadata();
@@ -986,7 +1040,7 @@ export function CodexChatBox({
       <div className="amk-chatbox__toolbar">
         <div className="amk-chatbox__toolbar-left">
           {allowAttachments && (
-            <>
+            <div className="amk-chatbox__attachment-picker" ref={attachmentMenuRef}>
               <input
                 ref={fileInputRef}
                 className="amk-chatbox__file-input"
@@ -997,17 +1051,76 @@ export function CodexChatBox({
                 aria-hidden="true"
                 onChange={handleFileChange}
               />
+              <input
+                ref={folderInputRef}
+                className="amk-chatbox__file-input"
+                type="file"
+                accept={accept}
+                multiple
+                tabIndex={-1}
+                aria-hidden="true"
+                onChange={handleFileChange}
+              />
               <button
                 className="amk-chatbox__icon-button"
                 type="button"
+                aria-haspopup="menu"
+                aria-expanded={isAttachmentMenuOpen}
                 aria-label={resolvedLabels.attach}
                 title={resolvedLabels.attach}
-                onClick={openFilePicker}
+                onClick={toggleAttachmentMenu}
                 disabled={isBusy}
               >
                 <span aria-hidden="true">+</span>
               </button>
-            </>
+              {isAttachmentMenuOpen && (
+                <div className="amk-chatbox__attachment-menu" role="menu">
+                  <button
+                    className="amk-chatbox__attachment-menu-item"
+                    type="button"
+                    role="menuitem"
+                    onClick={openFilePicker}
+                  >
+                    <svg
+                      className="amk-chatbox__attachment-menu-icon"
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                    >
+                      <path
+                        d="M8 12.5v-5a4 4 0 0 1 8 0v7a6 6 0 0 1-12 0v-7"
+                        stroke="currentColor"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="2"
+                      />
+                    </svg>
+                    <span>{resolvedLabels.attachFiles}</span>
+                  </button>
+                  <button
+                    className="amk-chatbox__attachment-menu-item"
+                    type="button"
+                    role="menuitem"
+                    onClick={openFolderPicker}
+                  >
+                    <svg
+                      className="amk-chatbox__attachment-menu-icon"
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                    >
+                      <path
+                        d="M3 7.5A2.5 2.5 0 0 1 5.5 5H9l2 2h7.5A2.5 2.5 0 0 1 21 9.5v7A2.5 2.5 0 0 1 18.5 19h-13A2.5 2.5 0 0 1 3 16.5z"
+                        stroke="currentColor"
+                        strokeLinejoin="round"
+                        strokeWidth="2"
+                      />
+                    </svg>
+                    <span>{resolvedLabels.attachFolder}</span>
+                  </button>
+                </div>
+              )}
+            </div>
           )}
           {renderSlot(slots?.leftTools, context)}
         </div>

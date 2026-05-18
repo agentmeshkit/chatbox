@@ -75,6 +75,10 @@ Use it for routing context such as `sessionId`, `workspaceId`, or surface name.
 Without `uploadHandler`, files stay local and are returned as `payload.files`.
 The component does not persist bytes or create URLs.
 
+The built-in `+` control opens an attachment menu. `Add files or photos` uses
+the normal file picker; `Add folder` uses a browser directory picker when
+supported. Both paths flow into the same selected-file pipeline.
+
 With `uploadHandler`, chatbox manages queueing, progress, retry, and uploaded
 metadata:
 

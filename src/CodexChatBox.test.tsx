@@ -300,6 +300,42 @@ describe('CodexChatBox', () => {
     expect(screen.getByText('local.md')).toBeTruthy();
   });
 
+  it('opens an attachment menu from the plus button', async () => {
+    const user = userEvent.setup();
+    render(<CodexChatBox onSubmit={vi.fn()} />);
+
+    await user.click(screen.getByRole('button', { name: 'Attach file' }));
+
+    expect(screen.getByRole('menu')).toBeTruthy();
+    expect(screen.getByRole('menuitem', { name: 'Add files or photos' })).toBeTruthy();
+    expect(screen.getByRole('menuitem', { name: 'Add folder' })).toBeTruthy();
+  });
+
+  it('routes attachment menu actions to file and folder pickers', async () => {
+    const user = userEvent.setup();
+    render(<CodexChatBox onSubmit={vi.fn()} />);
+
+    const inputs = Array.from(
+      document.querySelectorAll('input[type="file"]'),
+    ) as HTMLInputElement[];
+    const [fileInput, folderInput] = inputs;
+    const fileClick = vi.spyOn(fileInput, 'click');
+    const folderClick = vi.spyOn(folderInput, 'click');
+
+    expect(folderInput.hasAttribute('webkitdirectory')).toBe(true);
+    expect(folderInput.hasAttribute('directory')).toBe(true);
+
+    await user.click(screen.getByRole('button', { name: 'Attach file' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Add files or photos' }));
+    expect(fileClick).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('menu')).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: 'Attach file' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Add folder' }));
+    expect(folderClick).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('menu')).toBeNull();
+  });
+
   it('renders slot controls with state and actions', async () => {
     const user = userEvent.setup();
     const onSubmit = vi.fn();

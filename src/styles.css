@@ -321,6 +321,59 @@
   display: none;
 }
 
+.amk-chatbox__attachment-picker {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+.amk-chatbox__attachment-menu {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  z-index: 10;
+  display: flex;
+  min-width: 216px;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px;
+  border: 1px solid var(--amk-chatbox-border);
+  border-radius: 8px;
+  background: var(--amk-chatbox-bg-elevated);
+  box-shadow: var(--amk-chatbox-shadow);
+}
+
+.amk-chatbox__attachment-menu-item {
+  display: flex;
+  width: 100%;
+  min-height: 30px;
+  align-items: center;
+  gap: 10px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--amk-chatbox-text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1;
+  text-align: left;
+}
+
+.amk-chatbox__attachment-menu-item:hover,
+.amk-chatbox__attachment-menu-item:focus-visible {
+  outline: 0;
+  background: var(--amk-chatbox-bg-control-hover);
+}
+
+.amk-chatbox__attachment-menu-icon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  color: var(--amk-chatbox-text-muted);
+}
+
 .amk-chatbox__icon-button,
 .amk-chatbox__send {
   display: inline-flex;
