@@ -15,7 +15,8 @@ import '@agentmeshkit/chatbox/styles.css';
 ```
 
 Requires React 18+. Always import the stylesheet; the package export map exposes
-it as `@agentmeshkit/chatbox/styles.css`.
+it as `@agentmeshkit/chatbox/styles.css`. The default dark palette is scoped to
+the chatbox root and does not write variables to `:root`.
 
 ## Basic Controlled Use
 
@@ -37,6 +38,19 @@ as `CodexChatBox`. Uncontrolled text is also supported:
 ```tsx
 <CodexChatBox defaultValue="" onSubmit={sendTurn} />
 ```
+
+## Theme
+
+Use the built-in theme prop instead of hand-picking every CSS variable:
+
+```tsx
+<CodexChatBox theme="light" onSubmit={sendTurn} />
+<CodexChatBox theme="auto" onSubmit={sendTurn} />
+```
+
+`theme="auto"` follows the user's light color-scheme preference through the
+bundled stylesheet. Custom palettes should set `--amk-chatbox-*` variables on a
+class passed through `className`, with host CSS loaded after the package styles.
 
 ## Submit Payload
 
@@ -118,6 +132,8 @@ state and actions such as `submit`, `focus`, `clearText`, `clearFiles`,
 ## Operational Rules
 
 - Always import `@agentmeshkit/chatbox/styles.css`.
+- Use `theme="light"` for light host surfaces or `theme="auto"` to honor a
+  system light preference.
 - `onSubmit` may be async. With the default `clearOnSubmit={true}`, the
   component clears only after successful completion and keeps the draft on
   rejection. Use `onSubmitError(error, payload)` for failed submits.

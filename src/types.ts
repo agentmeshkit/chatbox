@@ -117,6 +117,8 @@ export interface ChatBoxSlots {
 
 export type ChatBoxLocale = 'en' | 'zh';
 
+export type ChatBoxTheme = 'dark' | 'light' | 'auto';
+
 export interface ChatBoxLabels {
   root?: string;
   textarea?: string;
@@ -215,6 +217,11 @@ export interface CodexChatBoxProps extends NativeTextareaProps {
   disabled?: boolean;
   loading?: boolean;
   streaming?: boolean;
+  /**
+   * Visual theme applied to the chatbox root. `auto` keeps the dark default
+   * unless the user's system preference is light.
+   */
+  theme?: ChatBoxTheme;
   className?: string;
   textareaClassName?: string;
   placeholder?: string;

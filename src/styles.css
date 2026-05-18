@@ -1,4 +1,4 @@
-:root {
+.amk-chatbox {
   --amk-chatbox-bg: #111111;
   --amk-chatbox-bg-elevated: #181818;
   --amk-chatbox-bg-control: #242424;
@@ -9,14 +9,74 @@
   --amk-chatbox-text-muted: #a1a1aa;
   --amk-chatbox-text-subtle: #71717a;
   --amk-chatbox-accent: #f4f4f5;
+  --amk-chatbox-accent-hover: #ffffff;
   --amk-chatbox-accent-text: #111111;
   --amk-chatbox-danger: #fb7185;
   --amk-chatbox-radius: 24px;
   --amk-chatbox-control-radius: 999px;
   --amk-chatbox-shadow: 0 18px 55px rgba(0, 0, 0, 0.38);
+  --amk-chatbox-spinner-track: rgba(255, 255, 255, 0.18);
   --amk-chatbox-font:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
     sans-serif;
+}
+
+.amk-chatbox--light,
+.amk-chatbox[data-theme='light'] {
+  --amk-chatbox-bg: #ffffff;
+  --amk-chatbox-bg-elevated: #f5f5f4;
+  --amk-chatbox-bg-control: #ecebe9;
+  --amk-chatbox-bg-control-hover: #dad8d4;
+  --amk-chatbox-border: rgba(0, 0, 0, 0.08);
+  --amk-chatbox-border-focus: rgba(0, 0, 0, 0.2);
+  --amk-chatbox-text: #1a1a1a;
+  --amk-chatbox-text-muted: #57534e;
+  --amk-chatbox-text-subtle: #78716c;
+  --amk-chatbox-accent: #18181b;
+  --amk-chatbox-accent-hover: #27272a;
+  --amk-chatbox-accent-text: #ffffff;
+  --amk-chatbox-danger: #b91c1c;
+  --amk-chatbox-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+  --amk-chatbox-spinner-track: rgba(0, 0, 0, 0.16);
+}
+
+@media (prefers-color-scheme: light) {
+  .amk-chatbox[data-theme='auto'] {
+    --amk-chatbox-bg: #ffffff;
+    --amk-chatbox-bg-elevated: #f5f5f4;
+    --amk-chatbox-bg-control: #ecebe9;
+    --amk-chatbox-bg-control-hover: #dad8d4;
+    --amk-chatbox-border: rgba(0, 0, 0, 0.08);
+    --amk-chatbox-border-focus: rgba(0, 0, 0, 0.2);
+    --amk-chatbox-text: #1a1a1a;
+    --amk-chatbox-text-muted: #57534e;
+    --amk-chatbox-text-subtle: #78716c;
+    --amk-chatbox-accent: #18181b;
+    --amk-chatbox-accent-hover: #27272a;
+    --amk-chatbox-accent-text: #ffffff;
+    --amk-chatbox-danger: #b91c1c;
+    --amk-chatbox-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+    --amk-chatbox-spinner-track: rgba(0, 0, 0, 0.16);
+  }
+}
+
+.amk-chatbox--dark,
+.amk-chatbox[data-theme='dark'] {
+  --amk-chatbox-bg: #111111;
+  --amk-chatbox-bg-elevated: #181818;
+  --amk-chatbox-bg-control: #242424;
+  --amk-chatbox-bg-control-hover: #303030;
+  --amk-chatbox-border: rgba(255, 255, 255, 0.14);
+  --amk-chatbox-border-focus: rgba(255, 255, 255, 0.28);
+  --amk-chatbox-text: #f4f4f5;
+  --amk-chatbox-text-muted: #a1a1aa;
+  --amk-chatbox-text-subtle: #71717a;
+  --amk-chatbox-accent: #f4f4f5;
+  --amk-chatbox-accent-hover: #ffffff;
+  --amk-chatbox-accent-text: #111111;
+  --amk-chatbox-danger: #fb7185;
+  --amk-chatbox-shadow: 0 18px 55px rgba(0, 0, 0, 0.38);
+  --amk-chatbox-spinner-track: rgba(255, 255, 255, 0.18);
 }
 
 .amk-chatbox {
@@ -295,7 +355,7 @@
 }
 
 .amk-chatbox__send:hover:not(:disabled) {
-  background: #ffffff;
+  background: var(--amk-chatbox-accent-hover);
 }
 
 .amk-chatbox__stop {
@@ -339,7 +399,7 @@
 .amk-chatbox__spinner {
   width: 12px;
   height: 12px;
-  border: 2px solid rgba(255, 255, 255, 0.18);
+  border: 2px solid var(--amk-chatbox-spinner-track);
   border-top-color: var(--amk-chatbox-text);
   border-radius: 50%;
   animation: amk-chatbox-spin 0.8s linear infinite;

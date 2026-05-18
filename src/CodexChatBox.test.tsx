@@ -23,7 +23,27 @@ describe('CodexChatBox', () => {
 
     expect(packageJson.exports['./styles.css']).toBe('./dist/styles.css');
     expect(existsSync(stylesPath)).toBe(true);
-    expect(readFileSync(stylesPath, 'utf8')).toContain('.amk-chatbox');
+    const stylesheet = readFileSync(stylesPath, 'utf8');
+    expect(stylesheet).toContain('.amk-chatbox');
+    expect(stylesheet).not.toContain(':root');
+    expect(stylesheet).toContain(".amk-chatbox[data-theme='light']");
+    expect(stylesheet).toContain(".amk-chatbox[data-theme='auto']");
+  });
+
+  it('sets the theme on the chatbox root', () => {
+    render(<CodexChatBox onSubmit={vi.fn()} theme="light" />);
+
+    expect(screen.getByRole('form', { name: 'Composer' }).getAttribute('data-theme')).toBe(
+      'light',
+    );
+  });
+
+  it('supports auto theme selection on the chatbox root', () => {
+    render(<CodexChatBox onSubmit={vi.fn()} theme="auto" />);
+
+    expect(screen.getByRole('form', { name: 'Composer' }).getAttribute('data-theme')).toBe(
+      'auto',
+    );
   });
 
   it('submits uncontrolled text with Cmd/Ctrl+Enter and clears after submit', () => {

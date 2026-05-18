@@ -130,8 +130,9 @@ and actions such as `submit`, `focus`, `openFilePicker`, `removeFile`,
   state and emits callbacks with `File[]` unless the host supplies
   `uploadHandler`; then the component calls only that host callback and surfaces
   queue/progress/retry state.
-- Styles are distributed as `@agentmeshkit/chatbox/styles.css` and use
-  `--amk-chatbox-*` variables for theming.
+- Styles are distributed as `@agentmeshkit/chatbox/styles.css`, keep default
+  variables scoped to `.amk-chatbox`, and expose dark, light, and auto theme
+  selection through `theme`.
 - README.md is the caller-facing integration contract. `docs/AI_AGENT_INTEGRATION.md`
   is the compact agent-facing contract for automated integrations and should
   stay aligned with exported types.
