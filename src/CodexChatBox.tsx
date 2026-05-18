@@ -125,6 +125,7 @@ export function CodexChatBox({
   disabled = false,
   loading = false,
   streaming = false,
+  theme,
   className,
   textareaClassName,
   placeholder = DEFAULT_PLACEHOLDER,
@@ -904,6 +905,7 @@ export function CodexChatBox({
       data-loading={loading ? '' : undefined}
       data-streaming={streaming ? '' : undefined}
       data-submitting={isSubmitting ? '' : undefined}
+      data-theme={theme}
       role="form"
       aria-label={resolvedLabels.root}
       aria-disabled={disabled ? true : undefined}

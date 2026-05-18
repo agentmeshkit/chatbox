@@ -80,6 +80,7 @@ import {
   DEFAULT_LABELS_ZH,
   type AttachmentEntry,
   type ChatBoxSubmitPayload,
+  type ChatBoxTheme,
   type CodexChatBoxProps,
   type UploadedAttachment,
   type UploadHandler,
@@ -346,7 +347,25 @@ and pass the resulting local `File` list/chip state through `files` and
 
 ## Theming
 
-Import `@agentmeshkit/chatbox/styles.css`, then override CSS variables:
+Import `@agentmeshkit/chatbox/styles.css`. The default dark palette is scoped to
+the `.amk-chatbox` root so it does not write variables to `:root`.
+
+Use the built-in light or system-aware themes when the host surface is light:
+
+```tsx
+<CodexChatBox theme="light" onSubmit={sendTurn} />
+<CodexChatBox theme="auto" onSubmit={sendTurn} />
+```
+
+The light preset is also available as a root class when hosts prefer to route
+theme state through `className`:
+
+```tsx
+<CodexChatBox className="amk-chatbox--light" onSubmit={sendTurn} />
+```
+
+For custom themes, override CSS variables on the chatbox root class. Load host
+CSS after `@agentmeshkit/chatbox/styles.css`:
 
 ```css
 .my-chatbox {
@@ -354,6 +373,28 @@ Import `@agentmeshkit/chatbox/styles.css`, then override CSS variables:
   --amk-chatbox-border: rgba(255, 255, 255, 0.18);
   --amk-chatbox-accent: #ffffff;
   --amk-chatbox-radius: 24px;
+}
+```
+
+Copy-paste light palette:
+
+```css
+.amk-chatbox--light {
+  --amk-chatbox-bg: #ffffff;
+  --amk-chatbox-bg-elevated: #f5f5f4;
+  --amk-chatbox-bg-control: #ecebe9;
+  --amk-chatbox-bg-control-hover: #dad8d4;
+  --amk-chatbox-border: rgba(0, 0, 0, 0.08);
+  --amk-chatbox-border-focus: rgba(0, 0, 0, 0.2);
+  --amk-chatbox-text: #1a1a1a;
+  --amk-chatbox-text-muted: #57534e;
+  --amk-chatbox-text-subtle: #78716c;
+  --amk-chatbox-accent: #18181b;
+  --amk-chatbox-accent-hover: #27272a;
+  --amk-chatbox-accent-text: #ffffff;
+  --amk-chatbox-danger: #b91c1c;
+  --amk-chatbox-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+  --amk-chatbox-spinner-track: rgba(0, 0, 0, 0.16);
 }
 ```
 
@@ -365,7 +406,9 @@ The stylesheet export is part of the package contract:
 import '@agentmeshkit/chatbox/styles.css';
 ```
 
-Hosts may override these variables on `.amk-chatbox` or an ancestor:
+Hosts may override these variables on the chatbox root class, such as a custom
+class passed through `className`, or a more specific selector loaded after the
+package stylesheet:
 
 - `--amk-chatbox-bg`
 - `--amk-chatbox-bg-elevated`
@@ -377,11 +420,13 @@ Hosts may override these variables on `.amk-chatbox` or an ancestor:
 - `--amk-chatbox-text-muted`
 - `--amk-chatbox-text-subtle`
 - `--amk-chatbox-accent`
+- `--amk-chatbox-accent-hover`
 - `--amk-chatbox-accent-text`
 - `--amk-chatbox-danger`
 - `--amk-chatbox-radius`
 - `--amk-chatbox-control-radius`
 - `--amk-chatbox-shadow`
+- `--amk-chatbox-spinner-track`
 - `--amk-chatbox-font`
 - `--amk-chatbox-textarea-max-height`
 
