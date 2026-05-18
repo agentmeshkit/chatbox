@@ -146,6 +146,13 @@
   color: var(--amk-chatbox-text-subtle);
 }
 
+.amk-chatbox .amk-chatbox__textarea:focus,
+.amk-chatbox .amk-chatbox__textarea:focus-visible {
+  border: 0;
+  outline: 0;
+  box-shadow: none;
+}
+
 .amk-chatbox__textarea:disabled {
   cursor: not-allowed;
 }

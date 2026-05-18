@@ -28,6 +28,8 @@ describe('CodexChatBox', () => {
     expect(stylesheet).not.toContain(':root');
     expect(stylesheet).toContain(".amk-chatbox[data-theme='light']");
     expect(stylesheet).toContain(".amk-chatbox[data-theme='auto']");
+    expect(stylesheet).toContain('.amk-chatbox .amk-chatbox__textarea:focus');
+    expect(stylesheet).toContain('box-shadow: none;');
   });
 
   it('sets the theme on the chatbox root', () => {
