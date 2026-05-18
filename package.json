@@ -1,6 +1,6 @@
 {
   "name": "@agentmeshkit/chatbox",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": false,
   "type": "module",
   "description": "Reusable React chat input box for coding-agent products.",
@@ -20,7 +20,8 @@
   "scripts": {
     "build": "rm -rf dist && tsc -p tsconfig.json && cp src/styles.css dist/styles.css",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "prepublishOnly": "npm run build"
   },
   "peerDependencies": {
     "react": ">=18",
@@ -37,5 +38,13 @@
     "react-dom": "^19.2.6",
     "typescript": "^5.5.4",
     "vitest": "^4.1.6"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/agentmeshkit/chatbox.git"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com",
+    "access": "public"
   }
 }
