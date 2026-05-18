@@ -90,11 +90,15 @@ export interface ChatBoxRenderContext {
   loading: boolean;
   streaming: boolean;
   submitting: boolean;
+  voiceListening: boolean;
   pendingAttachmentCount: number;
   canSubmit: boolean;
   canStop: boolean;
+  canUseVoiceInput: boolean;
   submit: () => void;
   stop: () => void;
+  startVoiceInput: () => void;
+  stopVoiceInput: () => void;
   focus: () => void;
   clearText: () => void;
   clearFiles: () => void;
@@ -125,6 +129,10 @@ export interface ChatBoxLabels {
   attach?: string;
   attachFiles?: string;
   attachFolder?: string;
+  voice?: string;
+  stopVoice?: string;
+  voiceListening?: string;
+  voiceUnsupported?: string;
   removeFile?: (file: File) => string;
   removeAttachment?: (attachment: { name: string }) => string;
   retryAttachment?: string;
@@ -219,6 +227,17 @@ export interface CodexChatBoxProps extends NativeTextareaProps {
   disabled?: boolean;
   loading?: boolean;
   streaming?: boolean;
+  /** Enables the built-in browser speech-to-text voice button. */
+  enableVoiceInput?: boolean;
+  /**
+   * Recognition language passed to SpeechRecognition.lang. Defaults to the
+   * browser locale when available.
+   */
+  voiceLanguage?: string;
+  onVoiceStart?: () => void;
+  onVoiceEnd?: () => void;
+  onVoiceTranscript?: (transcript: string, nextText: string) => void;
+  onVoiceError?: (error: Error) => void;
   /**
    * Visual theme applied to the chatbox root. `auto` keeps the dark default
    * unless the user's system preference is light.

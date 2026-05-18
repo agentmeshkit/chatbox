@@ -133,6 +133,9 @@ and actions such as `submit`, `focus`, `openFilePicker`, `removeFile`,
 - Styles are distributed as `@agentmeshkit/chatbox/styles.css`, keep default
   variables scoped to `.amk-chatbox`, and expose dark, light, and auto theme
   selection through `theme`.
+- Attachment UX includes a plus-menu picker, directory picker support where the
+  browser exposes it, drag/drop overlay, paste-image ingestion, and optional
+  browser voice input via `enableVoiceInput`.
 - README.md is the caller-facing integration contract. `docs/AI_AGENT_INTEGRATION.md`
   is the compact agent-facing contract for automated integrations and should
   stay aligned with exported types.

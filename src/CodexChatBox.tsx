@@ -37,6 +37,52 @@ const DEFAULT_MAX_TEXTAREA_HEIGHT = 220;
 const DEFAULT_MAX_CONCURRENT_UPLOADS = 4;
 const ERROR_TOAST_LIFETIME_MS = 3000;
 
+interface SpeechRecognitionAlternativeLike {
+  transcript: string;
+}
+
+interface SpeechRecognitionResultLike {
+  readonly isFinal: boolean;
+  readonly length: number;
+  [index: number]: SpeechRecognitionAlternativeLike | undefined;
+}
+
+interface SpeechRecognitionResultListLike {
+  readonly length: number;
+  [index: number]: SpeechRecognitionResultLike | undefined;
+}
+
+interface SpeechRecognitionEventLike extends Event {
+  readonly results: SpeechRecognitionResultListLike;
+}
+
+interface SpeechRecognitionErrorEventLike extends Event {
+  readonly error?: string;
+  readonly message?: string;
+}
+
+interface SpeechRecognitionLike {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  onstart: (() => void) | null;
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
+  onerror: ((event: SpeechRecognitionErrorEventLike) => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+  abort: () => void;
+}
+
+interface SpeechRecognitionConstructorLike {
+  new (): SpeechRecognitionLike;
+}
+
+interface SpeechRecognitionWindowLike extends Window {
+  SpeechRecognition?: SpeechRecognitionConstructorLike;
+  webkitSpeechRecognition?: SpeechRecognitionConstructorLike;
+}
+
 function cx(...values: Array<string | false | null | undefined>): string {
   return values.filter(Boolean).join(' ');
 }
@@ -63,6 +109,22 @@ function toError(error: unknown): Error {
   if (error instanceof Error) return error;
   if (typeof error === 'string' && error) return new Error(error);
   return new Error('Submit failed');
+}
+
+function appendTranscript(base: string, transcript: string): string {
+  const trimmedTranscript = transcript.trim();
+  if (!trimmedTranscript) return base;
+  if (!base.trim()) return trimmedTranscript;
+  const separator = /\s$/.test(base) ? '' : ' ';
+  return `${base}${separator}${trimmedTranscript}`;
+}
+
+function collectTranscript(results: SpeechRecognitionResultListLike): string {
+  let transcript = '';
+  for (let index = 0; index < results.length; index += 1) {
+    transcript += results[index]?.[0]?.transcript ?? '';
+  }
+  return transcript;
 }
 
 function acceptsFile(file: File, accept: string | undefined): boolean {
@@ -125,6 +187,12 @@ export function CodexChatBox({
   disabled = false,
   loading = false,
   streaming = false,
+  enableVoiceInput = false,
+  voiceLanguage,
+  onVoiceStart,
+  onVoiceEnd,
+  onVoiceTranscript,
+  onVoiceError,
   theme,
   className,
   textareaClassName,
@@ -150,11 +218,24 @@ export function CodexChatBox({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
+  const attachmentMenuButtonRef = useRef<HTMLButtonElement>(null);
+  const attachmentMenuItemRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const voiceTranscriptBaseRef = useRef('');
   const composingRef = useRef(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const attachmentMenuRef = useRef<HTMLDivElement>(null);
   const dragDepthRef = useRef(0);
   const [isAttachmentMenuOpen, setIsAttachmentMenuOpen] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const [isVoiceListening, setIsVoiceListening] = useState(false);
+  const attachmentMenuButtonId = `${textareaId}-attachment-menu-button`;
+  const attachmentMenuId = `${textareaId}-attachment-menu`;
+  const speechRecognitionConstructor = useMemo(() => {
+    if (typeof window === 'undefined') return undefined;
+    const speechWindow = window as SpeechRecognitionWindowLike;
+    return speechWindow.SpeechRecognition ?? speechWindow.webkitSpeechRecognition;
+  }, []);
 
   const isTextControlled = value !== undefined;
   const [internalText, setInternalText] = useState(defaultValue);
@@ -223,6 +304,8 @@ export function CodexChatBox({
     (entry) => entry.status === 'queued' || entry.status === 'uploading',
   ).length;
   const isBusy = disabled || loading || streaming || isSubmitting;
+  const canUseVoiceInput =
+    enableVoiceInput && !isBusy && Boolean(speechRecognitionConstructor);
   const hasText = domText.trim().length > 0;
   const hasUploadedAttachment = currentAttachments.some(
     (entry) => entry.status === 'uploaded',
@@ -581,10 +664,91 @@ export function CodexChatBox({
     folderInputRef.current?.click();
   }, [allowAttachments, isBusy]);
 
+  const focusAttachmentMenuItem = useCallback((index: number) => {
+    const item = attachmentMenuItemRefs.current[index];
+    if (item) item.focus();
+  }, []);
+
+  const openAttachmentMenu = useCallback(
+    (focusIndex = 0) => {
+      if (isBusy || !allowAttachments) return;
+      setIsAttachmentMenuOpen(true);
+      window.setTimeout(() => focusAttachmentMenuItem(focusIndex), 0);
+    },
+    [allowAttachments, focusAttachmentMenuItem, isBusy],
+  );
+
   const toggleAttachmentMenu = useCallback(() => {
     if (isBusy || !allowAttachments) return;
-    setIsAttachmentMenuOpen((isOpen) => !isOpen);
-  }, [allowAttachments, isBusy]);
+    if (isAttachmentMenuOpen) {
+      setIsAttachmentMenuOpen(false);
+      return;
+    }
+    openAttachmentMenu();
+  }, [allowAttachments, isAttachmentMenuOpen, isBusy, openAttachmentMenu]);
+
+  const handleAttachmentButtonKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLButtonElement>) => {
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        openAttachmentMenu(0);
+      }
+      if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        openAttachmentMenu(1);
+      }
+    },
+    [openAttachmentMenu],
+  );
+
+  const handleAttachmentMenuKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLDivElement>) => {
+      const items = attachmentMenuItemRefs.current.filter(
+        (item): item is HTMLButtonElement => Boolean(item),
+      );
+      const activeIndex = items.findIndex((item) => item === document.activeElement);
+
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setIsAttachmentMenuOpen(false);
+        attachmentMenuButtonRef.current?.focus();
+        return;
+      }
+
+      if (event.key === 'Tab') {
+        setIsAttachmentMenuOpen(false);
+        return;
+      }
+
+      if (items.length === 0) return;
+
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        const nextIndex = activeIndex >= 0 ? (activeIndex + 1) % items.length : 0;
+        items[nextIndex]?.focus();
+      }
+
+      if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        const nextIndex =
+          activeIndex >= 0
+            ? (activeIndex - 1 + items.length) % items.length
+            : items.length - 1;
+        items[nextIndex]?.focus();
+      }
+
+      if (event.key === 'Home') {
+        event.preventDefault();
+        items[0]?.focus();
+      }
+
+      if (event.key === 'End') {
+        event.preventDefault();
+        items[items.length - 1]?.focus();
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     const input = folderInputRef.current;
@@ -624,6 +788,103 @@ export function CodexChatBox({
       document.removeEventListener('keydown', closeOnEscape);
     };
   }, [isAttachmentMenuOpen]);
+
+  const applyVoiceTranscript = useCallback(
+    (transcript: string) => {
+      const nextText = appendTranscript(voiceTranscriptBaseRef.current, transcript);
+      if (textareaRef.current) textareaRef.current.value = nextText;
+      setDomText(nextText);
+      setText(nextText);
+      syncTextareaHeight();
+      onVoiceTranscript?.(transcript.trim(), nextText);
+    },
+    [onVoiceTranscript, setText, syncTextareaHeight],
+  );
+
+  const stopVoiceInput = useCallback(() => {
+    const recognition = recognitionRef.current;
+    if (!recognition) return;
+    recognition.stop();
+  }, []);
+
+  const startVoiceInput = useCallback(() => {
+    if (!enableVoiceInput || isBusy) return;
+
+    const Recognition = speechRecognitionConstructor;
+    if (!Recognition) {
+      const error = new Error(resolvedLabels.voiceUnsupported);
+      onVoiceError?.(error);
+      flashValidationError(error.message);
+      return;
+    }
+
+    try {
+      recognitionRef.current?.abort();
+      const recognition = new Recognition();
+      recognitionRef.current = recognition;
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang =
+        voiceLanguage ??
+        (typeof navigator !== 'undefined' ? navigator.language : 'en-US');
+      voiceTranscriptBaseRef.current = textareaRef.current?.value ?? renderedText;
+
+      recognition.onstart = () => {
+        setIsVoiceListening(true);
+        onVoiceStart?.();
+      };
+      recognition.onresult = (event) => {
+        applyVoiceTranscript(collectTranscript(event.results));
+      };
+      recognition.onerror = (event) => {
+        const message = event.message || event.error || resolvedLabels.voiceUnsupported;
+        const error = new Error(message);
+        onVoiceError?.(error);
+        flashValidationError(error.message);
+      };
+      recognition.onend = () => {
+        recognitionRef.current = null;
+        setIsVoiceListening(false);
+        onVoiceEnd?.();
+      };
+
+      recognition.start();
+    } catch (error) {
+      recognitionRef.current = null;
+      setIsVoiceListening(false);
+      const normalized = toError(error);
+      onVoiceError?.(normalized);
+      flashValidationError(normalized.message);
+    }
+  }, [
+    applyVoiceTranscript,
+    enableVoiceInput,
+    flashValidationError,
+    isBusy,
+    onVoiceEnd,
+    onVoiceError,
+    onVoiceStart,
+    renderedText,
+    resolvedLabels,
+    speechRecognitionConstructor,
+    voiceLanguage,
+  ]);
+
+  useEffect(() => {
+    if (!isVoiceListening && !recognitionRef.current) return undefined;
+    if (!enableVoiceInput || isBusy) {
+      recognitionRef.current?.stop();
+    }
+    return undefined;
+  }, [enableVoiceInput, isBusy, isVoiceListening]);
+
+  useEffect(
+    () => () => {
+      recognitionRef.current?.abort();
+      recognitionRef.current = null;
+    },
+    [],
+  );
 
   const resolveMetadata = useCallback(() => {
     if (typeof metadata === 'function') return metadata();
@@ -717,6 +978,9 @@ export function CodexChatBox({
       accessMode: currentAccessMode,
       metadata: resolveMetadata(),
     };
+    if (isVoiceListening) {
+      stopVoiceInput();
+    }
     const clearMode =
       clearOnSubmit === false || clearOnSubmit === 'never'
         ? 'never'
@@ -767,12 +1031,14 @@ export function CodexChatBox({
     flashValidationError,
     isBusy,
     isSubmitBlockedByPendingUploads,
+    isVoiceListening,
     onSubmit,
     onSubmitError,
     pendingAttachmentCount,
     renderedText,
     resolveMetadata,
     resolvedLabels,
+    stopVoiceInput,
   ]);
 
   const context = useMemo<ChatBoxRenderContext>(
@@ -786,11 +1052,15 @@ export function CodexChatBox({
       loading,
       streaming,
       submitting: isSubmitting,
+      voiceListening: isVoiceListening,
       pendingAttachmentCount,
       canSubmit,
       canStop,
+      canUseVoiceInput,
       submit,
       stop,
+      startVoiceInput,
+      stopVoiceInput,
       focus,
       clearText,
       clearFiles,
@@ -802,6 +1072,7 @@ export function CodexChatBox({
     [
       canSubmit,
       canStop,
+      canUseVoiceInput,
       clearFiles,
       clearText,
       currentAccessMode,
@@ -812,6 +1083,7 @@ export function CodexChatBox({
       domText,
       focus,
       isSubmitting,
+      isVoiceListening,
       loading,
       openFilePicker,
       pendingAttachmentCount,
@@ -820,6 +1092,8 @@ export function CodexChatBox({
       retryAttachment,
       streaming,
       stop,
+      startVoiceInput,
+      stopVoiceInput,
       submit,
     ],
   );
@@ -887,6 +1161,7 @@ export function CodexChatBox({
     if (!dataTransferHasFiles(event.dataTransfer)) return;
     event.preventDefault();
     if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
+    setIsDragOver(true);
     rootRef.current?.setAttribute('data-amk-dragover', 'true');
   };
 
@@ -896,6 +1171,7 @@ export function CodexChatBox({
     event.preventDefault();
     if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
     dragDepthRef.current += 1;
+    setIsDragOver(true);
     rootRef.current?.setAttribute('data-amk-dragover', 'true');
   };
 
@@ -906,6 +1182,7 @@ export function CodexChatBox({
       dragDepthRef.current -= 1;
     }
     if (dragDepthRef.current === 0) {
+      setIsDragOver(false);
       rootRef.current?.removeAttribute('data-amk-dragover');
     }
   };
@@ -915,6 +1192,7 @@ export function CodexChatBox({
     if (!dataTransferHasFiles(event.dataTransfer)) return;
     event.preventDefault();
     dragDepthRef.current = 0;
+    setIsDragOver(false);
     rootRef.current?.removeAttribute('data-amk-dragover');
     const dropped = Array.from(event.dataTransfer?.files ?? []);
     if (dropped.length > 0) ingestFiles(dropped);
@@ -969,6 +1247,12 @@ export function CodexChatBox({
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
+      {isDragOver && (
+        <div className="amk-chatbox__drop-overlay" aria-hidden="true">
+          <span>{resolvedLabels.drop}</span>
+        </div>
+      )}
+
       {(currentFiles.length > 0 || currentAttachments.length > 0) && (
         <div className="amk-chatbox__attachments" data-testid="chatbox-attachments">
           {currentFiles.map((file, index) => (
@@ -1062,20 +1346,33 @@ export function CodexChatBox({
                 onChange={handleFileChange}
               />
               <button
+                ref={attachmentMenuButtonRef}
+                id={attachmentMenuButtonId}
                 className="amk-chatbox__icon-button"
                 type="button"
                 aria-haspopup="menu"
                 aria-expanded={isAttachmentMenuOpen}
+                aria-controls={isAttachmentMenuOpen ? attachmentMenuId : undefined}
                 aria-label={resolvedLabels.attach}
                 title={resolvedLabels.attach}
                 onClick={toggleAttachmentMenu}
+                onKeyDown={handleAttachmentButtonKeyDown}
                 disabled={isBusy}
               >
                 <span aria-hidden="true">+</span>
               </button>
               {isAttachmentMenuOpen && (
-                <div className="amk-chatbox__attachment-menu" role="menu">
+                <div
+                  id={attachmentMenuId}
+                  className="amk-chatbox__attachment-menu"
+                  role="menu"
+                  aria-labelledby={attachmentMenuButtonId}
+                  onKeyDown={handleAttachmentMenuKeyDown}
+                >
                   <button
+                    ref={(node) => {
+                      attachmentMenuItemRefs.current[0] = node;
+                    }}
                     className="amk-chatbox__attachment-menu-item"
                     type="button"
                     role="menuitem"
@@ -1098,6 +1395,9 @@ export function CodexChatBox({
                     <span>{resolvedLabels.attachFiles}</span>
                   </button>
                   <button
+                    ref={(node) => {
+                      attachmentMenuItemRefs.current[1] = node;
+                    }}
                     className="amk-chatbox__attachment-menu-item"
                     type="button"
                     role="menuitem"
@@ -1176,6 +1476,45 @@ export function CodexChatBox({
             ) : null)}
 
           {renderSlot(slots?.voiceButton, context)}
+
+          {!slots?.voiceButton && enableVoiceInput && (
+            <button
+              className={cx(
+                'amk-chatbox__icon-button',
+                'amk-chatbox__voice',
+                isVoiceListening && 'amk-chatbox__voice--listening',
+              )}
+              type="button"
+              aria-label={isVoiceListening ? resolvedLabels.stopVoice : resolvedLabels.voice}
+              aria-pressed={isVoiceListening}
+              title={isVoiceListening ? resolvedLabels.stopVoice : resolvedLabels.voice}
+              disabled={isBusy && !isVoiceListening}
+              onClick={isVoiceListening ? stopVoiceInput : startVoiceInput}
+            >
+              {isVoiceListening ? (
+                <span aria-hidden="true">■</span>
+              ) : (
+                <svg
+                  className="amk-chatbox__voice-icon"
+                  aria-hidden="true"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                >
+                  <path
+                    d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3Z"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  />
+                  <path
+                    d="M5 11a7 7 0 0 0 14 0M12 18v3M9 21h6"
+                    stroke="currentColor"
+                    strokeLinecap="round"
+                    strokeWidth="2"
+                  />
+                </svg>
+              )}
+            </button>
+          )}
 
           {renderSlot(slots?.sendButton, context) ??
             (canStop ? (

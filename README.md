@@ -159,6 +159,10 @@ The built-in `+` control opens an attachment menu with:
   `webkitdirectory`; selected files are passed through the same attachment
   pipeline as regular files.
 
+Dragging files over the chatbox shows a drop target and dropping files uses the
+same validation and upload path as the picker. Pasted images are also attached
+from the textarea.
+
 ```tsx
 <CodexChatBox
   defaultFiles={initialFiles}
@@ -167,6 +171,29 @@ The built-in `+` control opens an attachment menu with:
   onSubmit={({ text, files }) => sendTurnWithFiles(text, files)}
 />
 ```
+
+## Voice Input
+
+Set `enableVoiceInput` to show the built-in microphone button. When the browser
+supports the Web Speech API, recognized speech is appended to the textarea and
+emitted through `onChange`.
+
+```tsx
+<CodexChatBox
+  enableVoiceInput
+  voiceLanguage="en-US"
+  onVoiceTranscript={(transcript, nextText) => {
+    console.log(transcript, nextText);
+  }}
+  onVoiceError={(error) => console.warn(error.message)}
+  onSubmit={sendTurn}
+/>
+```
+
+Voice input is optional because browser support and permissions vary. Hosts can
+replace the built-in microphone through `slots.voiceButton`; slot render
+functions receive `voiceListening`, `canUseVoiceInput`, `startVoiceInput`, and
+`stopVoiceInput`.
 
 ## Managed Upload
 
@@ -336,6 +363,7 @@ and pass the resulting local `File` list/chip state through `files` and
 - `Cmd+Enter` / `Ctrl+Enter`: submit.
 - `Shift+Enter`: newline, handled by the native textarea.
 - IME composition: submit shortcuts are ignored while composition is active.
+- Attachment menu: `ArrowDown` / `ArrowUp` opens and navigates, `Escape` closes.
 
 ## Accessibility
 
@@ -345,6 +373,8 @@ and pass the resulting local `File` list/chip state through `files` and
   `labels.textarea` when the host surface needs a more specific label.
 - Attachment and send controls use `aria-label` / `title` values from
   `labels.attach`, `labels.removeFile`, and `labels.send`.
+- The attachment menu follows the menu button pattern with `aria-haspopup`,
+  `aria-expanded`, `aria-controls`, `role="menu"`, and `role="menuitem"`.
 - `loading` and `streaming` mark the root and textarea busy, render a polite
   `role="status"` indicator, and disable submit/attachment/select controls.
 - Internal async submission marks the root busy with `data-submitting`, renders

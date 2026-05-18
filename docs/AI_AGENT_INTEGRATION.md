@@ -78,6 +78,28 @@ The component does not persist bytes or create URLs.
 The built-in `+` control opens an attachment menu. `Add files or photos` uses
 the normal file picker; `Add folder` uses a browser directory picker when
 supported. Both paths flow into the same selected-file pipeline.
+Dragging files over the root shows a drop target and dropping them uses the
+same validation/upload path. Pasted images from the textarea are attached too.
+
+## Voice Input
+
+Use `enableVoiceInput` when the host wants the built-in browser speech-to-text
+button:
+
+```tsx
+<CodexChatBox
+  enableVoiceInput
+  voiceLanguage="en-US"
+  onVoiceError={(error) => reportVoiceIssue(error.message)}
+  onSubmit={sendTurn}
+/>
+```
+
+The implementation uses browser `SpeechRecognition` / `webkitSpeechRecognition`
+when available, appends recognized text to the textarea, and reports unsupported
+browsers or permission failures through `onVoiceError`. For custom voice
+providers, keep `enableVoiceInput` off and supply `slots.voiceButton`; the slot
+context exposes `startVoiceInput`, `stopVoiceInput`, and `voiceListening`.
 
 With `uploadHandler`, chatbox manages queueing, progress, retry, and uploaded
 metadata:

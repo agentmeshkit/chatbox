@@ -80,6 +80,7 @@
 }
 
 .amk-chatbox {
+  position: relative;
   display: flex;
   width: 100%;
   min-width: 0;
@@ -288,6 +289,29 @@
     var(--amk-chatbox-bg);
 }
 
+.amk-chatbox__drop-overlay {
+  position: absolute;
+  inset: 8px;
+  z-index: 8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed rgba(96, 165, 250, 0.72);
+  border-radius: calc(var(--amk-chatbox-radius) - 8px);
+  background: rgba(96, 165, 250, 0.12);
+  color: var(--amk-chatbox-text);
+  font-size: 14px;
+  font-weight: 600;
+  pointer-events: none;
+}
+
+.amk-chatbox__drop-overlay span {
+  padding: 8px 12px;
+  border-radius: var(--amk-chatbox-control-radius);
+  background: var(--amk-chatbox-bg-elevated);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
+}
+
 .amk-chatbox__validation {
   padding: 6px 10px;
   border: 1px solid var(--amk-chatbox-danger);
@@ -416,6 +440,21 @@
 
 .amk-chatbox__send:hover:not(:disabled) {
   background: var(--amk-chatbox-accent-hover);
+}
+
+.amk-chatbox__voice-icon {
+  width: 17px;
+  height: 17px;
+}
+
+.amk-chatbox__voice--listening {
+  border-color: transparent;
+  background: var(--amk-chatbox-danger);
+  color: #ffffff;
+}
+
+.amk-chatbox__voice--listening:hover:not(:disabled) {
+  background: var(--amk-chatbox-danger);
 }
 
 .amk-chatbox__stop {

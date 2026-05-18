@@ -311,6 +311,29 @@ describe('CodexChatBox', () => {
     expect(screen.getByRole('menuitem', { name: 'Add folder' })).toBeTruthy();
   });
 
+  it('supports keyboard navigation in the attachment menu', async () => {
+    const user = userEvent.setup();
+    render(<CodexChatBox onSubmit={vi.fn()} />);
+
+    const attach = screen.getByRole('button', { name: 'Attach file' });
+    attach.focus();
+    await user.keyboard('{ArrowDown}');
+
+    expect(screen.getByRole('menu')).toBeTruthy();
+    expect(document.activeElement).toBe(
+      screen.getByRole('menuitem', { name: 'Add files or photos' }),
+    );
+
+    await user.keyboard('{ArrowDown}');
+    expect(document.activeElement).toBe(
+      screen.getByRole('menuitem', { name: 'Add folder' }),
+    );
+
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(document.activeElement).toBe(attach);
+  });
+
   it('routes attachment menu actions to file and folder pickers', async () => {
     const user = userEvent.setup();
     render(<CodexChatBox onSubmit={vi.fn()} />);
@@ -334,6 +357,158 @@ describe('CodexChatBox', () => {
     await user.click(screen.getByRole('menuitem', { name: 'Add folder' }));
     expect(folderClick).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole('menu')).toBeNull();
+  });
+
+  it('captures browser voice input into the textarea when enabled', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    const onVoiceTranscript = vi.fn();
+    const originalRecognition = (
+      window as Window & {
+        webkitSpeechRecognition?: unknown;
+      }
+    ).webkitSpeechRecognition;
+    let recognition:
+      | {
+          start: ReturnType<typeof vi.fn>;
+          stop: ReturnType<typeof vi.fn>;
+          onstart: (() => void) | null;
+          onresult:
+            | ((event: {
+                results: {
+                  length: number;
+                  0: { length: number; isFinal: boolean; 0: { transcript: string } };
+                };
+              }) => void)
+            | null;
+          onend: (() => void) | null;
+        }
+      | null = null;
+
+    class MockSpeechRecognition {
+      continuous = false;
+      interimResults = false;
+      lang = '';
+      onstart: (() => void) | null = null;
+      onresult:
+        | ((event: {
+            results: {
+              length: number;
+              0: { length: number; isFinal: boolean; 0: { transcript: string } };
+            };
+          }) => void)
+        | null = null;
+      onerror = null;
+      onend: (() => void) | null = null;
+      start = vi.fn(() => this.onstart?.());
+      stop = vi.fn(() => this.onend?.());
+      abort = vi.fn();
+
+      constructor() {
+        recognition = this;
+      }
+    }
+
+    Object.defineProperty(window, 'webkitSpeechRecognition', {
+      configurable: true,
+      writable: true,
+      value: MockSpeechRecognition,
+    });
+
+    try {
+      render(
+        <CodexChatBox
+          defaultValue="existing"
+          enableVoiceInput
+          onChange={onChange}
+          onSubmit={vi.fn()}
+          onVoiceTranscript={onVoiceTranscript}
+        />,
+      );
+
+      await user.click(screen.getByRole('button', { name: 'Start voice input' }));
+      expect(recognition?.start).toHaveBeenCalledTimes(1);
+      expect(screen.getByRole('button', { name: 'Stop voice input' })).toBeTruthy();
+
+      recognition?.onresult?.({
+        results: {
+          length: 1,
+          0: { length: 1, isFinal: true, 0: { transcript: 'voice text' } },
+        },
+      });
+
+      expect(getTextarea().value).toBe('existing voice text');
+      expect(onChange).toHaveBeenCalledWith('existing voice text', undefined);
+      expect(onVoiceTranscript).toHaveBeenCalledWith(
+        'voice text',
+        'existing voice text',
+      );
+
+      await user.click(screen.getByRole('button', { name: 'Stop voice input' }));
+      expect(recognition?.stop).toHaveBeenCalledTimes(1);
+    } finally {
+      Object.defineProperty(window, 'webkitSpeechRecognition', {
+        configurable: true,
+        writable: true,
+        value: originalRecognition,
+      });
+    }
+  });
+
+  it('reports unsupported browser voice input', async () => {
+    const user = userEvent.setup();
+    const onVoiceError = vi.fn();
+    const originalRecognition = (
+      window as Window & {
+        SpeechRecognition?: unknown;
+        webkitSpeechRecognition?: unknown;
+      }
+    ).SpeechRecognition;
+    const originalWebkitRecognition = (
+      window as Window & {
+        SpeechRecognition?: unknown;
+        webkitSpeechRecognition?: unknown;
+      }
+    ).webkitSpeechRecognition;
+
+    Object.defineProperty(window, 'SpeechRecognition', {
+      configurable: true,
+      writable: true,
+      value: undefined,
+    });
+    Object.defineProperty(window, 'webkitSpeechRecognition', {
+      configurable: true,
+      writable: true,
+      value: undefined,
+    });
+
+    try {
+      render(
+        <CodexChatBox
+          enableVoiceInput
+          onSubmit={vi.fn()}
+          onVoiceError={onVoiceError}
+        />,
+      );
+
+      await user.click(screen.getByRole('button', { name: 'Start voice input' }));
+
+      expect(onVoiceError).toHaveBeenCalledTimes(1);
+      expect(screen.getByTestId('chatbox-validation-toast').textContent).toContain(
+        'Voice input is not supported',
+      );
+    } finally {
+      Object.defineProperty(window, 'SpeechRecognition', {
+        configurable: true,
+        writable: true,
+        value: originalRecognition,
+      });
+      Object.defineProperty(window, 'webkitSpeechRecognition', {
+        configurable: true,
+        writable: true,
+        value: originalWebkitRecognition,
+      });
+    }
   });
 
   it('renders slot controls with state and actions', async () => {

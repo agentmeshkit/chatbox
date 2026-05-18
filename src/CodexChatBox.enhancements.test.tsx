@@ -352,11 +352,13 @@ describe('CodexChatBox drag-drop and paste', () => {
 
     fireEvent.dragOver(root, { dataTransfer: data });
     expect(root.getAttribute('data-amk-dragover')).toBe('true');
+    expect(screen.getByText('Drop files to attach')).toBeTruthy();
     fireEvent.drop(root, { dataTransfer: data });
 
     expect(onFilesSelected).toHaveBeenCalledWith([file]);
     expect(screen.getByText('dropped.txt')).toBeTruthy();
     expect(root.getAttribute('data-amk-dragover')).toBeNull();
+    expect(screen.queryByText('Drop files to attach')).toBeNull();
   });
 
   it('clears drag-over state after repeated dragover events leave the root', () => {
