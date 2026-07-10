@@ -361,6 +361,54 @@ describe('CodexChatBox drag-drop and paste', () => {
     expect(screen.queryByText('Drop files to attach')).toBeNull();
   });
 
+  it('recursively expands a dropped folder before routing files through the pipeline', async () => {
+    const onFilesSelected = vi.fn();
+    render(
+      <CodexChatBox
+        onSubmit={vi.fn()}
+        onFilesSelected={onFilesSelected}
+      />,
+    );
+
+    const pdf = new File(['pdf'], 'guide.pdf', { type: 'application/pdf' });
+    const python = new File(['print(1)'], 'tool.py', { type: 'text/x-python' });
+    const fileEntry = (file: File) => ({
+      isFile: true,
+      isDirectory: false,
+      file: (success: (value: File) => void) => success(file),
+    });
+    const directoryEntry = (batches: unknown[][]) => ({
+      isFile: false,
+      isDirectory: true,
+      createReader: () => {
+        let index = 0;
+        return {
+          readEntries: (success: (entries: unknown[]) => void) => {
+            success(batches[index++] ?? []);
+          },
+        };
+      },
+    });
+    const nested = directoryEntry([[fileEntry(python)], []]);
+    const rootFolder = directoryEntry([[fileEntry(pdf), nested], []]);
+    const data = {
+      files: [],
+      items: [{
+        kind: 'file',
+        webkitGetAsEntry: () => rootFolder,
+      }],
+      types: ['Files'],
+    } as unknown as DataTransfer;
+
+    fireEvent.drop(screen.getByRole('form', { name: 'Composer' }), {
+      dataTransfer: data,
+    });
+
+    await waitFor(() => expect(onFilesSelected).toHaveBeenCalledWith([pdf, python]));
+    expect(screen.getByText('guide.pdf')).toBeTruthy();
+    expect(screen.getByText('tool.py')).toBeTruthy();
+  });
+
   it('clears drag-over state after repeated dragover events leave the root', () => {
     render(<CodexChatBox onSubmit={vi.fn()} onFilesSelected={vi.fn()} />);
 

@@ -83,6 +83,77 @@ interface SpeechRecognitionWindowLike extends Window {
   webkitSpeechRecognition?: SpeechRecognitionConstructorLike;
 }
 
+interface DroppedFileEntry {
+  isFile: boolean;
+  isDirectory: boolean;
+  file?: (
+    success: (file: File) => void,
+    error?: (error: DOMException) => void,
+  ) => void;
+  createReader?: () => {
+    readEntries: (
+      success: (entries: DroppedFileEntry[]) => void,
+      error?: (error: DOMException) => void,
+    ) => void;
+  };
+}
+
+function droppedEntries(transfer: DataTransfer): DroppedFileEntry[] {
+  const entries: DroppedFileEntry[] = [];
+  for (let index = 0; index < transfer.items.length; index += 1) {
+    const item = transfer.items[index] as DataTransferItem & {
+      webkitGetAsEntry?: () => DroppedFileEntry | null;
+    };
+    const entry = item.webkitGetAsEntry?.();
+    if (entry) entries.push(entry);
+  }
+  return entries;
+}
+
+function readDroppedFile(entry: DroppedFileEntry): Promise<File> {
+  return new Promise((resolve, reject) => {
+    if (!entry.file) {
+      reject(new Error('Dropped file entry is unreadable'));
+      return;
+    }
+    entry.file(resolve, reject);
+  });
+}
+
+function readDirectoryBatch(
+  reader: ReturnType<NonNullable<DroppedFileEntry['createReader']>>,
+): Promise<DroppedFileEntry[]> {
+  return new Promise((resolve, reject) => reader.readEntries(resolve, reject));
+}
+
+async function collectDroppedEntryFiles(
+  entry: DroppedFileEntry,
+  files: File[],
+): Promise<void> {
+  if (entry.isFile) {
+    files.push(await readDroppedFile(entry));
+    return;
+  }
+  if (!entry.isDirectory || !entry.createReader) return;
+
+  const reader = entry.createReader();
+  while (true) {
+    const children = await readDirectoryBatch(reader);
+    if (children.length === 0) return;
+    for (const child of children) {
+      await collectDroppedEntryFiles(child, files);
+    }
+  }
+}
+
+async function collectDroppedFiles(entries: DroppedFileEntry[]): Promise<File[]> {
+  const files: File[] = [];
+  for (const entry of entries) {
+    await collectDroppedEntryFiles(entry, files);
+  }
+  return files;
+}
+
 function cx(...values: Array<string | false | null | undefined>): string {
   return values.filter(Boolean).join(' ');
 }
@@ -1194,6 +1265,13 @@ export function CodexChatBox({
     dragDepthRef.current = 0;
     setIsDragOver(false);
     rootRef.current?.removeAttribute('data-amk-dragover');
+    const entries = droppedEntries(event.dataTransfer);
+    if (entries.length > 0) {
+      void collectDroppedFiles(entries)
+        .then((files) => ingestFiles(files))
+        .catch(() => flashValidationError(resolvedLabels.uploadError));
+      return;
+    }
     const dropped = Array.from(event.dataTransfer?.files ?? []);
     if (dropped.length > 0) ingestFiles(dropped);
   };

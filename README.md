@@ -244,6 +244,10 @@ handler with the originally selected `File`.
 The root element accepts file drops and the textarea accepts image pastes.
 Both pipelines route through the same code path as the file picker, so
 `uploadHandler` (if provided) is invoked for dropped and pasted files too.
+On browsers that expose the File and Directory Entries API, dropping a folder
+recursively expands every nested file before passing the batch to that same
+pipeline. Use `maxConcurrentUploads={1}` when the host requires strict
+one-at-a-time upload order.
 
 ```tsx
 <CodexChatBox
