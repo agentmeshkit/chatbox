@@ -39,7 +39,7 @@
     "react-dom": "^19.2.6",
     "typescript": "^5.5.4",
     "vite": "^8.0.16",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.11"
   },
   "repository": {
     "type": "git",
