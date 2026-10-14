@@ -445,6 +445,7 @@ describe('CodexChatBox drag-drop and paste', () => {
     );
     const file = new File(['png'], 'paste.png', { type: 'image/png' });
     const clipboardData = {
+      getData: () => '',
       items: [
         {
           kind: 'file',
@@ -857,7 +858,7 @@ describe('attachment input integrity', () => {
     render(<CodexChatBox defaultValue="keep this" uploadHandler={async () => { throw new Error('offline'); }} onSubmit={submit} />);
     fireEvent.drop(screen.getByRole('form'), { dataTransfer: { types: ['Files'], items: [], files: [new File(['x'], 'x.txt')] } });
     await waitFor(() => expect(screen.getByTestId('chatbox-attachment-0').getAttribute('data-status')).toBe('error'));
-    fireEvent.keyDown(getTextarea(), { key: 'Enter' });
+    fireEvent.keyDown(getTextarea(), { key: 'Enter', ctrlKey: true });
     expect(submit).not.toHaveBeenCalled();
     expect(getTextarea().value).toBe('keep this');
   });
@@ -865,4 +866,17 @@ describe('attachment input integrity', () => {
     render(<CodexChatBox disabled onSubmit={() => {}} />);
     expect(fireEvent.drop(screen.getByRole('form'), { dataTransfer: { types: ['Files'], items: [], files: [new File(['x'], 'x.txt')] } })).toBe(false);
   });
+});
+
+it('waits for directory enumeration before sending', async () => {
+  let deliver: (entries: unknown[]) => void = () => {};
+  const submit = vi.fn();
+  render(<CodexChatBox defaultValue="wait for files" onSubmit={submit} uploadHandler={async file => ({name:file.name,size:file.size})} />);
+  const directory = { isDirectory:true, isFile:false, createReader: () => ({ readEntries: (callback: typeof deliver) => { deliver = callback; } }) };
+  fireEvent.drop(screen.getByRole('form'), {dataTransfer:{types:['Files'],items:[{webkitGetAsEntry:()=>directory}],files:[]}});
+  fireEvent.keyDown(getTextarea(), {key:'Enter',ctrlKey:true});
+  expect(submit).not.toHaveBeenCalled();
+  await act(async () => { deliver([]); });
+  fireEvent.keyDown(getTextarea(), {key:'Enter',ctrlKey:true});
+  expect(submit).toHaveBeenCalledTimes(1);
 });

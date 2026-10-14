@@ -377,6 +377,10 @@ export function CodexChatBox({
     attachmentsRef.current = currentAttachments;
   }, [currentAttachments]);
 
+  const [collectingFiles, setCollectingFiles] = useState(0);
+  const collectingRef = useRef(0);
+  const mountedRef = useRef(true);
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
   const pendingAttachmentCount = currentAttachments.filter(
     (entry) => entry.status === 'queued' || entry.status === 'uploading',
   ).length;
@@ -388,7 +392,7 @@ export function CodexChatBox({
     (entry) => entry.status === 'uploaded',
   );
   const isSubmitBlockedByPendingUploads =
-    (pendingAttachmentCount > 0 && !allowSubmitWithPendingUploads) || currentAttachments.some(entry => entry.status === 'error');
+    collectingFiles > 0 || (pendingAttachmentCount > 0 && !allowSubmitWithPendingUploads) || currentAttachments.some(entry => entry.status === 'error');
   const canSubmit =
     !isBusy &&
     !isSubmitBlockedByPendingUploads &&
@@ -1018,7 +1022,7 @@ export function CodexChatBox({
 
   const submit = useCallback(() => {
     if (isBusy) return;
-    if (isSubmitBlockedByPendingUploads) {
+    if (collectingRef.current > 0 || isSubmitBlockedByPendingUploads) {
       flashValidationError(resolvedLabels.pendingUploads(pendingAttachmentCount));
       return;
     }
@@ -1273,9 +1277,12 @@ export function CodexChatBox({
     rootRef.current?.removeAttribute('data-amk-dragover');
     const entries = droppedEntries(event.dataTransfer);
     if (entries.length > 0) {
+      collectingRef.current += 1;
+      setCollectingFiles(collectingRef.current);
       void collectDroppedFiles(entries, (maxFiles ?? 1000) + 1)
-        .then((files) => ingestFiles(files))
-        .catch(() => flashValidationError(resolvedLabels.uploadError));
+        .then((files) => { if (mountedRef.current) ingestFiles(files); })
+        .catch(() => { if (mountedRef.current) flashValidationError(resolvedLabels.uploadError); })
+        .finally(() => { collectingRef.current -= 1; if (mountedRef.current) setCollectingFiles(collectingRef.current); });
       return;
     }
     const dropped = Array.from(event.dataTransfer?.files ?? []);
