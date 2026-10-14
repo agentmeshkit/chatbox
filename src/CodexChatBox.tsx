@@ -129,7 +129,11 @@ function readDirectoryBatch(
 async function collectDroppedEntryFiles(
   entry: DroppedFileEntry,
   files: File[],
+  limit: number,
+  depth = 0,
 ): Promise<void> {
+  if (files.length >= limit) return;
+  if (depth > 32) throw new Error("Directory nesting limit exceeded");
   if (entry.isFile) {
     files.push(await readDroppedFile(entry));
     return;
@@ -141,15 +145,17 @@ async function collectDroppedEntryFiles(
     const children = await readDirectoryBatch(reader);
     if (children.length === 0) return;
     for (const child of children) {
-      await collectDroppedEntryFiles(child, files);
+      await collectDroppedEntryFiles(child, files, limit, depth + 1);
+      if (files.length >= limit) return;
     }
   }
 }
 
-async function collectDroppedFiles(entries: DroppedFileEntry[]): Promise<File[]> {
+async function collectDroppedFiles(entries: DroppedFileEntry[], limit: number): Promise<File[]> {
   const files: File[] = [];
   for (const entry of entries) {
-    await collectDroppedEntryFiles(entry, files);
+    await collectDroppedEntryFiles(entry, files, limit);
+    if (files.length >= limit) break;
   }
   return files;
 }
@@ -382,7 +388,7 @@ export function CodexChatBox({
     (entry) => entry.status === 'uploaded',
   );
   const isSubmitBlockedByPendingUploads =
-    pendingAttachmentCount > 0 && !allowSubmitWithPendingUploads;
+    (pendingAttachmentCount > 0 && !allowSubmitWithPendingUploads) || currentAttachments.some(entry => entry.status === 'error');
   const canSubmit =
     !isBusy &&
     !isSubmitBlockedByPendingUploads &&
@@ -1228,18 +1234,18 @@ export function CodexChatBox({
   };
 
   const handleDragOver = (event: DragEvent<HTMLDivElement>) => {
-    if (!allowAttachments || isBusy) return;
     if (!dataTransferHasFiles(event.dataTransfer)) return;
     event.preventDefault();
+    if (!allowAttachments || isBusy) return;
     if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
     setIsDragOver(true);
     rootRef.current?.setAttribute('data-amk-dragover', 'true');
   };
 
   const handleDragEnter = (event: DragEvent<HTMLDivElement>) => {
-    if (!allowAttachments || isBusy) return;
     if (!dataTransferHasFiles(event.dataTransfer)) return;
     event.preventDefault();
+    if (!allowAttachments || isBusy) return;
     if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
     dragDepthRef.current += 1;
     setIsDragOver(true);
@@ -1259,15 +1265,15 @@ export function CodexChatBox({
   };
 
   const handleDrop = (event: DragEvent<HTMLDivElement>) => {
-    if (!allowAttachments || isBusy) return;
     if (!dataTransferHasFiles(event.dataTransfer)) return;
     event.preventDefault();
+    if (!allowAttachments || isBusy) return;
     dragDepthRef.current = 0;
     setIsDragOver(false);
     rootRef.current?.removeAttribute('data-amk-dragover');
     const entries = droppedEntries(event.dataTransfer);
     if (entries.length > 0) {
-      void collectDroppedFiles(entries)
+      void collectDroppedFiles(entries, (maxFiles ?? 1000) + 1)
         .then((files) => ingestFiles(files))
         .catch(() => flashValidationError(resolvedLabels.uploadError));
       return;
@@ -1290,6 +1296,19 @@ export function CodexChatBox({
     }
     if (pasted.length > 0) {
       event.preventDefault();
+      // Preventing the browser default for images must not swallow text in a
+      // mixed clipboard payload. Insert only event-provided plain text.
+      const text = event.clipboardData.getData('text/plain');
+      if (text) {
+        const textarea = event.currentTarget;
+        const start = textarea.selectionStart;
+        const next = textarea.value.slice(0, start) + text + textarea.value.slice(textarea.selectionEnd);
+        textarea.value = next;
+        textarea.setSelectionRange(start + text.length, start + text.length);
+        setDomText(next);
+        setText(next);
+        syncTextareaHeight();
+      }
       ingestFiles(pasted);
     }
   };

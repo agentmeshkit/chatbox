@@ -835,3 +835,34 @@ describe('CodexChatBox image preview', () => {
     expect(chip.querySelector('.amk-chatbox__chip-badge')?.textContent).toBe('PDF');
   });
 });
+
+
+describe('attachment input integrity', () => {
+  it('inserts mixed clipboard text at the selection and uploads every image', async () => {
+    const upload = vi.fn(async (file: File) => ({ name: file.name, relPath: file.name }));
+    render(<CodexChatBox defaultValue="before AFTER" uploadHandler={upload} onSubmit={() => {}} />);
+    const input = getTextarea();
+    input.setSelectionRange(7, 12);
+    const files = [new File(['one'], 'one.png', { type: 'image/png' }), new File(['two'], 'two.png', { type: 'image/png' })];
+    fireEvent.paste(input, { clipboardData: { getData: () => 'mixed text', items: files.map(file => ({ kind: 'file', type: file.type, getAsFile: () => file })) } });
+    expect(input.value).toBe('before mixed text');
+    await waitFor(() => expect(upload).toHaveBeenCalledTimes(2));
+  });
+  it('does not swallow ordinary text paste', () => {
+    render(<CodexChatBox onSubmit={() => {}} />);
+    expect(fireEvent.paste(getTextarea(), { clipboardData: { items: [{ kind: 'string', type: 'text/plain' }] } })).toBe(true);
+  });
+  it('blocks sending when one attachment failed, retaining text', async () => {
+    const submit = vi.fn();
+    render(<CodexChatBox defaultValue="keep this" uploadHandler={async () => { throw new Error('offline'); }} onSubmit={submit} />);
+    fireEvent.drop(screen.getByRole('form'), { dataTransfer: { types: ['Files'], items: [], files: [new File(['x'], 'x.txt')] } });
+    await waitFor(() => expect(screen.getByTestId('chatbox-attachment-0').getAttribute('data-status')).toBe('error'));
+    fireEvent.keyDown(getTextarea(), { key: 'Enter' });
+    expect(submit).not.toHaveBeenCalled();
+    expect(getTextarea().value).toBe('keep this');
+  });
+  it('prevents file navigation while disabled', () => {
+    render(<CodexChatBox disabled onSubmit={() => {}} />);
+    expect(fireEvent.drop(screen.getByRole('form'), { dataTransfer: { types: ['Files'], items: [], files: [new File(['x'], 'x.txt')] } })).toBe(false);
+  });
+});
